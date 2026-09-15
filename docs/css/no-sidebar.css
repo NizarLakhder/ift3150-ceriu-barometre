@@ -1,0 +1,17 @@
+/* custom.css */
+
+/* Hide all sidebars */
+/* .md-sidebar {
+    display: none !important;
+} */
+
+/* Hide the section sidebar (on the left) */
+@media screen and (min-width: 76em) {
+    .md-sidebar--primary {
+        display: none !important;
+    }
+}
+/* Hide the table of contents */
+/* .md-sidebar--secondary {
+    display: none !important;
+} */
