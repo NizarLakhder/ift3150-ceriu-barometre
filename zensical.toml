@@ -1,17 +1,17 @@
 [project]
-site_name = "Site de suivi &ndash; Projet IFT3150"
-site_description = "Template de site web pour le cours IFT3150"
-site_author = "Louis-Edouard Lafontant"
-site_url = "https://ift3150-template.github.io"
+site_name = "Baromètre CERIU &ndash; Projet IFT3150"
+site_description = "Suivi du projet IFT3150 : ce que les données publiques permettent d'observer sur les pratiques de gestion d'actifs municipales"
+site_author = "Nizar Lakhder"
+site_url = "https://nizarlakhder.github.io/ift3150-ceriu-barometre/"
 
 copyright = """
-&copy; 2026 <b>DIRO</b> &ndash; Template de site pour le cours IFT3150 <br>
+&copy; 2026 Nizar Lakhder &ndash; Projet IFT3150, en collaboration avec le CERIU <br>
 Département d'informatique et de recherche opérationnelle <br>
 Université de Montréal
 """
 
-repo_name = "ift3150-template"
-repo_url = "https://github.com/ift3150-template/ift3150-template.github.io"
+repo_name = "ift3150-ceriu-barometre"
+repo_url = "https://github.com/NizarLakhder/ift3150-ceriu-barometre"
 
 # edit_uri = "edit/main/docs/"
 

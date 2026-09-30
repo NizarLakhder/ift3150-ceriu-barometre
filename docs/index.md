@@ -80,9 +80,37 @@ Le projet sera réalisé de manière progressive afin de pouvoir valider chaque 
 
 Les principales étapes prévues sont :
 
+1. **Comprendre les données.** Parcourir les exports du SEAO en entier, jamais un échantillon, pour
+   établir leur structure réelle : champs présents ou absents, emplacement des montants, sens des
+   dates.
+2. **Extraire et structurer.** Isoler les acheteurs municipaux et produire des tableaux vérifiables,
+   où chaque ligne renvoie à son avis public.
+3. **Ajouter le contexte.** Rattacher chaque organisme à des sources officielles, comme le répertoire
+   des municipalités, pour connaître sa population, sa taille et l'état de son réseau d'eau.
+4. **Valider.** Mesurer ce que la méthode trouve, ce qu'elle rate et ce qu'elle attrape à tort, sur
+   des cas vérifiés à la main.
+5. **Comparer.** Confronter les résultats à ceux d'un agent automatisé et aux informations du CERIU.
+6. **Ensuite seulement,** proposer des indicateurs et envisager un baromètre.
+
+Le code d'analyse se trouve à la racine du dépôt : `analyser_seao.py` et `completer_contexte.py`.
+Il n'utilise que la bibliothèque standard de Python, pour que le CERIU puisse le reprendre sans rien
+installer.
+
 ### Validation et Évaluation
 
-> Indiquez comment vous évaluerez que votre solution répond aux objectifs du projet (ex. scénarios d’usage, tests, retours utilisateurs, indicateurs qualitatifs ou quantitatifs).
+La solution sera évaluée sur plusieurs plans :
+
+- **Fiabilité du code** : tests automatisés sur de petits cas construits, dont la réponse est connue;
+- **Reproductibilité** : une nouvelle exécution sur les mêmes fichiers doit donner exactement les
+  mêmes résultats;
+- **Justesse de l'extraction** : vérification manuelle de fiches représentatives, directement dans le
+  JSON et sur les avis publiés;
+- **Qualité de la détection** : nombre de démarches trouvées, manquées et détectées à tort, mesuré
+  sur des cas vérifiés à la main;
+- **Validation externe** : comparaison avec une liste de référence du CERIU, si elle peut être
+  obtenue, et avec l'expertise municipale du comité aviseur.
+
+Les seuils de réussite chiffrés restent à préciser avec le superviseur.
 
 ## Échéancier
 
@@ -91,6 +119,8 @@ Les principales étapes prévues sont :
 
 | Activités                      | Début   |   Fin   | Livrable                            | Statut      |
 |--------------------------------|---------|---------|-------------------------------------|-------------|
-| Ouverture de projet            | 4 Septembre   | 15 Septembre  | Proposition de projet               | ✅ Terminé  |
-| Études préliminaires           | 4 Septembre   | 22 Septemebre  | Document d'analyse                  | 🔄 En cours |
-| Présentation + Rapport         | 7 Decembre  | 14 Decembre | Présentation + Rapport              | ⏳ À venir  |
+| Ouverture de projet            | 4 septembre   | 15 septembre  | Proposition de projet               | ✅ Terminé  |
+| Études préliminaires           | 16 septembre  | 2 octobre     | Diagnostic des données, prototype, rapport au CERIU | 🔄 En cours |
+| Première mise en commun        | 2 octobre     | 2 octobre     | Présentation                        | 🔄 En cours |
+| Suite du projet                | À préciser    | À préciser    | À préciser avec le superviseur      | ⏳ À venir  |
+| Présentation + Rapport         | 7 décembre    | 14 décembre   | Présentation + Rapport              | ⏳ À venir  |

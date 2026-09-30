@@ -172,3 +172,24 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# ---------------------------------------------------------------------------
+# Projet d'analyse SEAO / PGA-Eau
+# ---------------------------------------------------------------------------
+
+# Exports du SEAO : volumineux et téléchargeables publiquement sur Données
+# Québec.
+donnees_seao/
+
+# Données de référence du MAMH, téléchargées depuis Données Québec.
+donnees_reference/
+
+# Tout ce que les scripts régénèrent, y compris les sauvegardes du contexte.
+sorties/
+
+# Système
+Thumbs.db
+.DS_Store
+
+# contexte_municipalites.csv, à la racine, n'est visé par aucune règle ci-dessus :
+# il contient la saisie manuelle du contexte et doit rester versionné.

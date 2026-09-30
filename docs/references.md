@@ -1,5 +1,5 @@
 ---
-title: Travail réalisé
+title: Références
 ---
 
 <style>
@@ -12,53 +12,83 @@ title: Travail réalisé
 
 # Références
 
-> :bulb: Cette page rassemble les **principales sources et ressources utilisées dans le cadre du projet**.  
-> 
-> Elle permet également de préciser **comment ces ressources ont contribué au travail réalisé**.
+Cette page rassemble les principales sources utilisées dans le projet, et précise le rôle que
+chacune a joué dans le travail réalisé.
 
+## Données
 
-## Références utilisées
+**Secrétariat du Conseil du trésor.** *Système électronique d'appel d'offres (SEAO)*. Données
+Québec, licence Creative Commons avec attribution.
+<https://www.donneesquebec.ca/recherche/dataset/systeme-electronique-dappel-doffres-seao>
 
-> Selon la nature du projet, vous pouvez notamment référencer :
->
-> * articles scientifiques ou techniques ;
-> * livres et ouvrages de référence ;
-> * documentation officielle ;
-> * normes et spécifications ;
-> * bibliothèques, frameworks et outils importants ;
-> * jeux de données et API ;
-> * projets ou solutions existantes étudiées ;
-> * rapports, études ou publications institutionnelles ;
-> * ressources Web pertinentes.
->
-> Il n'est pas nécessaire de répertorier chaque page consultée. Privilégiez les références qui ont **réellement soutenu, orienté ou influencé votre travail**.
+Source principale du projet. Les exports hebdomadaires et mensuels au format JSON fournissent les
+avis, attributions et contrats des organismes publics, dont les acheteurs municipaux. Deux exports
+ont été analysés en entier : la semaine du 7 au 13 septembre 2026 et le mois d'août 2026.
 
-### Présentation des références
+**Ministère des Affaires municipales et de l'Habitation.** *Répertoire des municipalités du Québec*.
+Données Québec, licence Creative Commons avec attribution.
+<https://www.donneesquebec.ca/recherche/dataset/repertoire-des-municipalites-du-quebec>
 
-> Pour chaque référence importante, fournissez :
->
-> * les informations permettant d'identifier et de retrouver la source ;
-> * une courte justification de **1 à 2 phrases** expliquant son rôle dans le projet.
->
-> La justification peut notamment indiquer si la référence a servi à :
->
-> * comprendre le problème ;
-> * comparer des approches ;
-> * orienter un choix technique ;
-> * concevoir ou implémenter une solution ;
-> * définir une méthode d'évaluation ;
-> * interpréter des résultats.
+Fournit le code géographique, la population décrétée, la superficie, la région administrative et la
+MRC de chaque municipalité. Sert au contexte municipal de l'axe 2, puisque le SEAO ne contient aucune
+de ces informations.
 
-### Exemple
+**Ministère des Affaires municipales et de l'Habitation.** *Stratégie québécoise d'économie d'eau
+potable 2019-2025*. Données Québec, licence Creative Commons avec attribution.
+<https://www.donneesquebec.ca/recherche/dataset/sqeep-2019-2025>
 
-> **Mozilla Developer Network.** *Web APIs*.
-> https://developer.mozilla.org/
->
-> Cette documentation a été utilisée comme référence principale pour comprendre le fonctionnement des API Web exploitées dans l'application et valider certains choix d'implémentation.
+Fournit, pour 1 104 municipalités ayant un réseau de distribution, la population desservie, un indice
+de fuites dans les infrastructures et la validité des audits de l'eau. Ces données décrivent l'état
+des réseaux et se relient au répertoire par le code géographique.
 
-> **Nom de l'auteur.** *Titre de l'article*. Nom de la publication, année.
->
-> Cet article a permis de comparer différentes approches au problème étudié et a contribué au choix de la méthode retenue dans le projet.
+## Documentation
+
+**Gouvernement du Québec.** *Préparer un plan de gestion des actifs en eau (PGA-Eau)*.
+<https://www.quebec.ca/habitation-territoire/infrastructures-municipales/plan-gestion-actif-pga/eau>
+
+A permis de comprendre les trois étapes officielles d'un PGA-Eau et l'échéance d'engagement du
+31 décembre 2026. A aussi montré qu'il n'existe pas de liste publique des municipalités engagées,
+ce qui justifie la démarche du projet.
+
+**Open Contracting Partnership.** *Open Contracting Data Standard (OCDS)*, version 1.1.
+<https://standard.open-contracting.org/>
+
+A servi à comprendre la structure des exports du SEAO, qui suivent ce standard : fiches, parties,
+avis, attributions et contrats. L'analyse a aussi montré des écarts entre le standard et les
+fichiers réels, par exemple le bloc des soumissions.
+
+**Centre d'expertise et de recherche en infrastructures urbaines (CERIU).** Charte de projet du
+baromètre, document interne non diffusé, 2026.
+
+Précise le mandat du partenaire, les livrables attendus et les autres démarches à étudier par la
+suite, comme le PGA-Bâtiment et le plan climat.
+
+### Pistes explorées, pas encore utilisées
+
+**Statistique Canada.** *Classification des centres de population et des régions rurales.*
+
+Définit un centre de population comme un territoire d'au moins 1 000 habitants et 400 habitants au
+kilomètre carré. Piste pour remplir le type de milieu des municipalités à partir de données déjà
+disponibles.
+
+**Ministère de l'Environnement du Québec.** *Zones de gestion intégrée de l'eau par bassin versant*.
+Données Québec.
+<https://www.donneesquebec.ca/recherche/dataset/zgiebv>
+
+Piste pour rattacher chaque municipalité à son bassin versant. Disponible seulement en format
+cartographique, ce qui demande un traitement géographique.
+
+## Outils
+
+**Python Software Foundation.** *Bibliothèque standard de Python* : modules `csv`, `json` et
+`unittest`. <https://docs.python.org/3/library/>
+
+Les programmes d'analyse n'utilisent que la bibliothèque standard, pour que le CERIU puisse les
+reprendre sans rien installer.
+
+**Zensical.** <https://zensical.org/>
+
+Génère et publie ce site de suivi.
 
 ## Utilisation de l'intelligence artificielle
 
