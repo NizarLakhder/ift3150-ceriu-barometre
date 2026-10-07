@@ -142,8 +142,8 @@ Trois orientations fixées pour la suite :
 !!! warning "Difficultés"
     - Le fichier de contexte empêchait de traiter le fichier mensuel, parce que la Ville de Montréal
       publie sous un identifiant par service et que cette liste change d'un export à l'autre.
-      Résolu : le rapprochement accepte maintenant un changement d'identifiants dès qu'au moins
-      un identifiant est commun.
+      Résolu : le rapprochement accepte maintenant un changement d'identifiants si le nom est
+      identique et qu'au moins un identifiant est commun.
     - Les municipalités n'écrivent pas toutes « PGA-Eau » de la même façon : l'une utilise un tiret
       long, une autre n'emploie pas l'acronyme, ce qui fait échouer une recherche du mot
       « PGA-Eau ».
@@ -165,7 +165,8 @@ Trois orientations fixées pour la suite :
     - [x] Préparation de la présentation en cinq diapositives
     - [x] Réécriture des programmes pour les rendre plus lisibles : `analyser_seao.py` et
           `completer_contexte.py`
-    - [ ] Mise en commun du 2 octobre
+    - [x] Code, README et site de suivi publiés sur GitHub
+    - [x] Mise en commun du 2 octobre
 
 ### Prochaines étapes
 
@@ -177,3 +178,52 @@ Trois orientations fixées pour la suite :
 - Étudier une base de données pour cumuler plusieurs périodes sans compter deux fois les mêmes
   dossiers : 476 dossiers apparaissent à la fois dans l'export hebdomadaire et dans le mensuel
 - Préciser avec le CERIU l'accès à l'agent Hermes et la tâche à lui confier
+
+---
+
+## Semaine 6 (5 au 11 octobre) — Corrections
+
+### Objectifs de la période
+- Corriger les défauts présentés à la mise en commun avant d'ajouter de nouvelles fonctions
+- Vérifier chaque correction en comparant les résultats avant et après
+
+### Travail réalisé
+
+!!! abstract "Avancement"
+    - [x] Contexte des organismes d'août : le programme d'analyse ajoute maintenant au fichier de
+          contexte les organismes qu'un nouvel export fait apparaître (367 pour août)
+        - Organismes d'août avec population : de 246 à 572 sur 665
+    - [x] Homonymes : 23 départagés, 10 par le code postal publié dans le SEAO et 13 par la
+          désignation écrite dans le nom (Canton, Village, Ville, Paroisse)
+        - Rapprochements ambigus : de 27 à 3
+        - Organismes de la semaine avec population : de 286 à 295 sur 346
+    - [x] Règle de repérage du PGA-Eau intégrée au programme (colonne `pga_eau`)
+        - Sur les 9 037 fiches des deux exports : 5 dossiers trouvés sur 5, sans fausse alerte,
+          contre 3 avec la seule recherche de l'acronyme
+    - [x] Tests : de 23 à 41, dont 13 pour `completer_contexte.py`, qui n'en avait aucun
+    - [x] Pour chaque correction, sorties comparées avant et après : seules les valeurs visées changent
+
+### Décisions et ajustements
+
+!!! info "Décisions"
+    - Le fichier de contexte peut recevoir de nouvelles lignes, mais une ligne existante n'est
+      jamais modifiée. Le programme le vérifie octet par octet et garde une sauvegarde.
+    - Un homonyme n'est départagé qu'avec un indice publié. Le mot « Municipalité » ne compte pas,
+      et la façon dont chaque cas a été tranché est écrite dans le fichier de contexte.
+    - Quand les identifiants d'un organisme ne concordent qu'en partie, le nom doit aussi être
+      identique : un identifiant commun ne suffit plus.
+
+### Difficultés rencontrées
+
+!!! warning "Difficultés"
+    - Le SEAO appelle « Municipalité » des organismes qui sont des paroisses, comme Sainte-Françoise
+      et Saint-Isidore. Se fier à ce mot aurait donné la mauvaise municipalité.
+    - Le fichier des organismes périmunicipaux du ministère liste deux fois la Société de transport
+      de l'Outaouais, ce qui la faisait passer pour un homonyme.
+
+### Prochaines étapes
+
+- Construire une base de données SQLite pour cumuler les périodes sans double compte
+- Tester un agent d'intelligence artificielle sur la lecture des fichiers du SEAO et des
+  procès-verbaux, en mesurant ses réponses sur des cas vérifiés
+- Valider la règle PGA-Eau sur d'autres périodes

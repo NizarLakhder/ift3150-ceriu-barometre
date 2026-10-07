@@ -14,10 +14,10 @@ Site de suivi : <https://nizarlakhder.github.io/ift3150-ceriu-barometre/>
 Ce document résume ce qui a été fait à ce jour, ce que les données montrent, les questions qui
 restent ouvertes, puis la façon de relancer le travail.
 
-**État au 30 septembre 2026.** Deux exports du SEAO ont été analysés : la semaine du 7 au
-13 septembre 2026, qui sert de référence, et le mois d'août 2026. Pour le mois, le contexte des
-367 organismes absents de la semaine n'est pas encore créé, et la règle propre au PGA-Eau n'est
-pas encore dans le programme.
+**État au 6 octobre 2026.** Deux exports du SEAO ont été analysés : la semaine du 7 au
+13 septembre 2026, qui sert de référence, et le mois d'août 2026. Depuis la première mise en commun
+du 2 octobre, le contexte des organismes d'août a été créé, les homonymes ont été départagés et une
+règle propre au PGA-Eau a été intégrée au programme.
 
 ## En bref
 
@@ -28,12 +28,13 @@ pas encore dans le programme.
   quatre dossiers PGA-Eau ; chercher le mot « PGA-Eau » en trouve deux, et le filtre large « lié à
   l'eau » les trouve tous, mais parmi 749 fiches. La semaine de septembre en ajoute un cinquième, à
   Matagami.
-- **Les petits contrats sont presque invisibles.** Seulement 8,5 % des contrats d'achat chiffrés de
-  la semaine, et 7,9 % de ceux d'août, sont sous 25 000 $. Il y en a plus de trois fois plus juste
-  au-dessus du seuil que juste en dessous.
-- **Le contexte municipal est rattaché automatiquement** pour 286 des 346 organismes : population,
-  superficie, région, MRC, et l'état du réseau d'eau pour 188 d'entre eux.
-- **Tout est reproductible** : deux programmes Python sans dépendance externe, 23 tests, et les mêmes
+- **Peu de petits contrats sont publiés.** Seulement 8,5 % des contrats d'achat chiffrés de la
+  semaine, et 7,9 % de ceux d'août, sont sous 25 000 $. Il y en a plus de trois fois plus juste
+  au-dessus du seuil que juste en dessous : un petit mandat peut passer inaperçu.
+- **Le contexte municipal est rattaché automatiquement** : population, superficie, région et MRC
+  pour 295 des 346 organismes de la semaine et 572 des 665 organismes d'août, avec l'état du réseau
+  d'eau pour une partie d'entre eux.
+- **Tout est reproductible** : deux programmes Python sans dépendance externe, 41 tests, et les mêmes
   fichiers donnent toujours les mêmes chiffres.
 
 ## Ce qui a été fait
@@ -47,8 +48,8 @@ pas encore dans le programme.
 3. **Ajouter le contexte municipal.** `completer_contexte.py` rattache chaque organisme au Répertoire
    des municipalités et aux données de la Stratégie québécoise d'économie d'eau potable, deux jeux du
    ministère des Affaires municipales et de l'Habitation.
-4. **Préparer le repérage des démarches.** Le programme marque aujourd'hui les fiches liées à l'eau au
-   sens large. Une règle propre au PGA-Eau est en préparation.
+4. **Repérer les démarches PGA-Eau.** Le programme marque les fiches liées à l'eau au sens large
+   (colonne `lie_eau`) et, avec une règle plus précise, les dossiers PGA-Eau (colonne `pga_eau`).
 5. **Documenter la qualité des données**, pour savoir ce qu'il faut relire avant de compter.
 
 | | Semaine du 7 au 13 sept. 2026 | Mois d'août 2026 |
@@ -101,6 +102,12 @@ pas un contrat nouveau.
 à l'eau » les trouve toutes, mais parmi 749 fiches, soit 10 % du mois : une règle trop étroite rate
 des cas, une règle trop large noie les bons.
 
+Le programme applique maintenant une règle entre les deux (colonne `pga_eau`) : l'acronyme PGA
+suivi du mot « eau », quelle que soit la ponctuation, ou les mots « gestion », « actif » et « eau »
+dans le même titre. Sur les 9 037 fiches municipales des deux exports, elle retrouve les cinq
+dossiers lus à la main, Matagami compris, et aucun autre. Cinq cas restent trop peu pour conclure :
+la règle est à valider sur d'autres périodes.
+
 **Sur les prix.** Les montants vont de 4 892 $ (Matagami, un « renforcement stratégique » confié à
 l'UMQ, semaine de septembre) à 77 062 $ (Nicolet, un « accompagnement à la préparation » du plan).
 Ces mandats ne sont pas forcément de même nature : c'est l'objet de la première question plus bas.
@@ -142,22 +149,33 @@ chiffrés, 497 sont sous 25 000 $ (7,9 %), 1 802 entre 25 000 et 50 000 $ (28,6 
 Le SEAO ne donne ni population, ni superficie, ni état des réseaux. Le rattachement au Répertoire
 des municipalités se fait par le nom, puisque le SEAO ne porte aucun code géographique officiel.
 
-Sur les 346 organismes de la semaine, 286 ont maintenant leur population, leur superficie, leur
-région et leur MRC, et 188 ont en plus des données sur leur réseau d'eau. Les 60 organismes restants se
-répartissent ainsi :
+| | Semaine (346 organismes) | Août (665 organismes) |
+|---|---:|---:|
+| Population, superficie et région | 295 | 572 |
+| MRC | 236 | 478 |
+| Données sur le réseau d'eau | 192 | 357 |
+
+Quand un nom correspond à plusieurs municipalités du répertoire, le programme ne tranche qu'avec un
+indice publié : le code postal donné par le SEAO, comparé à celui de l'hôtel de ville, ou une
+désignation distinctive écrite au début du nom (Canton, Village, Ville, Paroisse). Le mot
+« Municipalité » ne compte pas : le SEAO l'emploie aussi pour des paroisses, comme Sainte-Françoise.
+23 homonymes ont été départagés ainsi, 10 par le code postal et 13 par la désignation, et la façon
+dont chacun a été tranché est écrite dans le fichier de contexte. Sans indice, le programme refuse
+de choisir.
+
+Les 51 organismes de la semaine encore sans population se répartissent ainsi :
 
 - **34** ne portent aucun nom du répertoire. Ce sont surtout des régies, des offices d'habitation et
-  des sociétés paramunicipales, comme la Société du Parc Jean-Drapeau, mais aussi 7 municipalités
+  des sociétés paramunicipales, comme la Société du Parc Jean-Drapeau, mais aussi des municipalités
   dont le nom s'écrit autrement dans le SEAO, comme « Saint-Donat-de-Rimouski ».
-- **14** sont des organismes périmunicipaux reconnus, mais le répertoire ne donne pour eux ni
+- **15** sont des organismes périmunicipaux reconnus, mais le répertoire ne donne pour eux ni
   population ni superficie.
-- **12** sont des homonymes, comme les deux Saint-Donat du Québec. Le programme refuse de choisir
-  entre eux et les signale pour une vérification à la main.
+- **2** restent ambigus faute d'adresse publiée : Saint-Donat et Saint-Elzéar, qui existent chacune
+  en deux exemplaires au Québec.
 
-Le fichier de contexte compte 348 lignes : ces 346 organismes, plus Nicolet et Windsor, saisies à la
-main pour suivre leurs dossiers PGA-Eau. D'où 288 lignes sur 348 avec une population dans le
-fichier, et 286 sur 346 pour les organismes de la semaine. En août, 367 des 665 organismes n'ont pas
-encore de ligne de contexte : seuls 246 ont une population.
+Le fichier de contexte compte 715 lignes : les organismes des deux exports, dont Nicolet et Windsor,
+saisies à la main pour suivre leurs dossiers PGA-Eau. Chaque nouvel export y ajoute les organismes
+qu'il fait apparaître, sans jamais modifier une ligne existante.
 
 Pour Matagami, on obtient ainsi : 1 352 habitants, 1 278 personnes desservies par le réseau, un
 indice de fuites de 3,14 et une validité des audits de l'eau de 58 %.
@@ -211,17 +229,15 @@ décrivent simplement la façon dont la source est construite.
 
 ## Prochaines étapes
 
-1. Créer les lignes de contexte des 367 organismes de l'export d'août absents de la semaine, puis les
-   compléter.
-2. Intégrer au programme une règle propre au PGA-Eau, et mesurer ce qu'elle trouve, ce qu'elle rate et
-   ce qu'elle attrape à tort.
-3. Cumuler plusieurs périodes sans compter deux fois les mêmes dossiers, puisque 476 dossiers
-   apparaissent dans les deux exports. Une petite base de données SQLite suffirait.
-4. Départager automatiquement la plupart des 12 homonymes, grâce au code postal publié dans le SEAO
-   et à la désignation écrite dans le nom (ville, paroisse, canton…).
-5. Faire une première comparaison ajustée à la population sur un petit groupe de municipalités
+1. Cumuler plusieurs périodes dans une petite base de données SQLite, sans compter deux fois les
+   mêmes dossiers : 476 dossiers apparaissent dans les deux exports.
+2. Tester un agent d'intelligence artificielle pour lire ce que le programme lit mal : les titres et
+   les fiches du SEAO, puis les procès-verbaux en PDF. Ses réponses seront mesurées sur des cas déjà
+   vérifiés à la main, comme les cinq dossiers PGA-Eau et les pièges connus.
+3. Valider la règle PGA-Eau sur d'autres périodes.
+4. Faire une première comparaison ajustée à la population sur un petit groupe de municipalités
    comparables.
-6. Documenter une démarche de bout en bout pour une municipalité, en cherchant dans d'autres sources
+5. Documenter une démarche de bout en bout pour une municipalité, en cherchant dans d'autres sources
    publiques la résolution du conseil et la publication du plan.
 
 ## Contenu du dépôt
@@ -230,8 +246,9 @@ décrivent simplement la façon dont la source est construite.
 |---|---|
 | `analyser_seao.py` | programme principal : lit un export du SEAO et produit quatre tableaux |
 | `completer_contexte.py` | complète le contexte municipal à partir des fichiers du MAMH |
-| `test_analyser_seao.py` | 23 tests sur de petits cas construits, sans lire le vrai export |
-| `contexte_municipalites.csv` | **saisie manuelle** du contexte, jamais écrasée par les programmes |
+| `test_analyser_seao.py` | 28 tests de l'analyse, sur de petits cas construits, sans lire le vrai export |
+| `test_completer_contexte.py` | 13 tests du contexte, inspirés de vrais homonymes |
+| `contexte_municipalites.csv` | le contexte de chaque organisme : les programmes y ajoutent des lignes et remplissent les cases « À compléter », mais **n'écrasent jamais une valeur** |
 | `docs/` | les pages du site de suivi |
 | `zensical.toml` | la configuration du site |
 | `.github/workflows/docs.yml` | la publication automatique du site |
@@ -252,12 +269,15 @@ python analyser_seao.py
 # Analyser un autre export, déposé dans donnees_seao/.
 python analyser_seao.py mensuel_20260801_20260831.json
 
-# Compléter le contexte municipal.
+# Compléter le contexte municipal (après l'analyse : il y lit les codes postaux).
 python completer_contexte.py
 
-# Lancer les tests.
-python -B -m unittest -v test_analyser_seao
+# Lancer les 41 tests des deux programmes.
+python -B -m unittest -v
 ```
+
+Après avoir complété le contexte, relancez l'analyse pour que les tableaux de `sorties/` en
+tiennent compte.
 
 Les tableaux produits sont écrits dans `sorties/`. Tout ce qui s'y trouve est remplacé à chaque
 exécution : n'y saisissez rien. Le seul fichier à remplir à la main est `contexte_municipalites.csv`.

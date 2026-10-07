@@ -39,8 +39,7 @@ ont directement orienté la suite du projet.
   contrat, qui diffèrent parfois. Le programme les garde séparés.
 - **Un seuil de publication crée un angle mort.** Compté par contrat, seulement 8,5 % des contrats
   d'achat de la semaine du 7 septembre sont sous 25 000 $, et 7,9 % en août, contre 24,4 % et 28,6 %
-  entre 25 000 $ et 50 000 $. Une petite municipalité qui paie son plan moins cher est donc presque
-  invisible.
+  entre 25 000 $ et 50 000 $. Un petit mandat peut donc passer inaperçu.
 - **Reconnaître une démarche est plus difficile qu'extraire les données.** L'export d'août contient
   quatre dossiers PGA-Eau : trois contrats attribués et un appel d'offres en cours (Windsor).
   Chercher le mot « PGA-Eau » en trouve deux sur quatre : Windsor écrit « PGA – Eau » avec un tiret
@@ -63,14 +62,15 @@ ont directement orienté la suite du projet.
 
 - **Un programme d'analyse**, `analyser_seao.py`, qui lit un export du SEAO, garde les acheteurs
   municipaux et produit quatre tableaux : le détail par fiche avec un lien vers l'avis public, un
-  résumé par organisme, l'état du contexte municipal, et une liste de points à relire.
+  résumé par organisme, l'état du contexte municipal, et une liste de points à relire. Il repère
+  aussi les dossiers PGA-Eau avec une règle dédiée (colonne `pga_eau`).
 - **Un programme de contexte**, `completer_contexte.py`, qui rattache les organismes au répertoire
-  des municipalités et aux données sur l'eau potable. Sur les 346 organismes de la semaine, 286 ont
-  maintenant leur population, leur superficie, leur région et leur MRC, et 188 ont des données sur
-  l'état de leur réseau d'eau. Le fichier de contexte ajoute Nicolet et Windsor, saisies à la main,
-  d'où 288 lignes sur 348 avec une population.
-- **Un fichier de contexte protégé**, `contexte_municipalites.csv`, où les saisies manuelles ne sont
-  jamais écrasées par les programmes.
+  des municipalités et aux données sur l'eau potable. Population, superficie et région sont
+  renseignées pour 295 des 346 organismes de la semaine et 572 des 665 organismes d'août. Quand un
+  nom correspond à plusieurs municipalités, il ne tranche qu'avec un indice publié, le code postal
+  ou une désignation distinctive : 23 homonymes ont été départagés ainsi, et 3 restent à vérifier.
+- **Un fichier de contexte protégé**, `contexte_municipalites.csv`, qui reçoit les organismes de
+  chaque nouvel export sans qu'aucune ligne existante ni aucune saisie manuelle ne soit modifiée.
 - **Un rapport destiné au CERIU**, qui présente les résultats, leurs limites et les décisions
   attendues du partenaire.
 
@@ -78,14 +78,15 @@ ont directement orienté la suite du projet.
 
 Ce qui a pu être vérifié à ce stade :
 
-- 23 tests automatisés vérifient les comportements délicats du code, comme l'identification des
-  fournisseurs et la protection des saisies manuelles;
-- les programmes donnent exactement les mêmes résultats d'une exécution à l'autre;
+- 41 tests automatisés vérifient les comportements délicats du code, comme l'identification des
+  fournisseurs, la protection des saisies manuelles et le départage des homonymes;
+- les programmes donnent exactement les mêmes résultats d'une exécution à l'autre, et chaque
+  correction a été vérifiée en comparant les sorties avant et après;
 - des fiches représentatives ont été examinées directement dans le JSON et sur les avis publiés;
 - la détection des PGA-Eau a été mesurée : chercher le mot « PGA-Eau » trouve deux des quatre
-  dossiers de l'export d'août, et le filtre « lié à l'eau » les trouve tous, parmi 749 fiches. Une
-  règle affinée, testée à part et pas encore intégrée au programme, trouve les cinq dossiers des
-  deux exports sans faux positif. Ce résultat reste à confirmer sur d'autres périodes.
+  dossiers de l'export d'août, et le filtre « lié à l'eau » les trouve tous, parmi 749 fiches. La
+  règle maintenant intégrée au programme trouve les cinq dossiers des deux exports sans faux
+  positif. Ce résultat reste à confirmer sur d'autres périodes.
 
 Ce qui reste à valider :
 
