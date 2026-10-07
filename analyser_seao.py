@@ -25,9 +25,9 @@ plus ancienne remonte à 2013.
 
 Deux prudences à garder en tête en lisant les résultats :
   - aucun montant publié n'est une dépense payée;
-  - trois classements sont des propositions à valider avec le CERIU : le
-    repérage des dossiers liés à l'eau, celui des subventions, et le type
-    d'organisme deviné à partir du nom.
+  - quatre classements sont des propositions à valider avec le CERIU : le
+    repérage des dossiers liés à l'eau, celui des PGA-Eau, celui des
+    subventions, et le type d'organisme deviné à partir du nom.
 
 Utilisation :
     python analyser_seao.py                                  # export de la semaine
@@ -38,14 +38,17 @@ pointe le rapport destiné au CERIU. Avec un autre export, elles portent le nom
 de la période, pour que deux périodes puissent coexister dans sorties/.
 
 Le contexte municipal vit dans contexte_municipalites.csv. Ce programme le crée
-au premier lancement, puis se contente de le lire. Seul completer_contexte.py y
-ajoute des valeurs, et uniquement dans les cases encore « À compléter ».
+au premier lancement. Ensuite, il y ajoute seulement, à la fin, les organismes
+qu'un nouvel export fait apparaître ; il ne modifie jamais une ligne existante.
+Seul completer_contexte.py remplit des valeurs, et uniquement dans les cases
+encore « À compléter ».
 Le rapport pour le CERIU s'écrit à la main : ce programme n'en génère aucun.
 """
 
 import csv
 import json
 import re
+import shutil
 import statistics
 import sys
 from collections import Counter, defaultdict
@@ -90,7 +93,7 @@ UNSPSC_SUBVENTION = ("9315", "84101501", "99000000")
 # certaines entrées (« pga-eau », « eaux usées »...) ne changent rien au
 # résultat; la liste compte surtout pour les titres qui n'emploient pas le mot
 # « eau », comme « aqueduc » ou « égout ».
-# Attention : lié à l'eau ne veut pas dire PGA-Eau (voir is_water_related).
+# Attention : lié à l'eau ne veut pas dire PGA-Eau (voir is_water_related et is_pga_eau).
 MOTS_CLES_EAU = [
     "pga-eau", "pga eau", "pga_eau",
     "aqueduc", "égout", "egout", "eau potable", "eaux usées", "eaux usees",
@@ -454,8 +457,7 @@ def is_water_related(titre, libelles):
 
     Il marque 178 fiches dans l'export de la semaine et 749 dans celui d'août.
     Les quatre dossiers PGA-Eau d'août en font partie, mais noyés dans le reste.
-    Reconnaître un vrai PGA-Eau demande une règle plus précise, qui n'est pas
-    encore dans ce programme.
+    Pour reconnaître un vrai PGA-Eau, voir is_pga_eau.
     """
     # L'apostrophe typographique devient une apostrophe droite, pour que
     # « station d’épuration » corresponde bien à la liste de mots-clés.
@@ -463,6 +465,30 @@ def is_water_related(titre, libelles):
     if re.search(r"\beaux?\b", text):
         return True
     return any(k in text for k in MOTS_CLES_EAU)
+
+
+def is_pga_eau(titre):
+    """Repère un dossier de plan de gestion des actifs en eau (PGA-Eau) d'après son titre.
+
+    Deux façons d'écrire la chose sont reconnues :
+      1. l'acronyme « PGA » suivi du mot « eau », quelle que soit la ponctuation
+         entre les deux : « PGA-Eau », « PGA-EAU », et aussi « PGA – Eau » avec
+         un tiret long, comme l'écrit Windsor;
+      2. les mots « gestion », « actif » et « eau » dans le même titre, pour les
+         municipalités qui n'emploient pas l'acronyme, comme Mont-Tremblant.
+    « eau » doit être un mot entier, et « PGA » aussi : la faute de frappe
+    « ACCOMPGANEMENT » ne compte pas. Un « plan de gestion des eaux pluviales »
+    ne compte pas non plus, faute du mot « actif ».
+
+    Mesure sur les 9 037 fiches municipales des exports de la semaine et d'août :
+    la règle retrouve les cinq dossiers lus à la main, et rien d'autre. Chercher
+    seulement l'acronyme « PGA-Eau » en retrouvait trois. Cinq cas restent trop
+    peu pour conclure : la règle est à valider sur d'autres périodes.
+    """
+    t = titre.lower().replace("’", "'")
+    if re.search(r"\bpga[\W_]*eaux?\b", t):
+        return True
+    return "gestion" in t and "actif" in t and re.search(r"\beaux?\b", t) is not None
 
 
 def analyse_release(release):
@@ -541,6 +567,7 @@ def analyse_release(release):
         "justification_methode": clean_text(tender.get("procurementMethodRationale")),
         "nature_transaction": nature,
         "lie_eau": "oui" if lie_eau else "non",
+        "pga_eau": "oui" if is_pga_eau(titre) else "non",
         # Ces noms servent à la lecture, jamais au calcul. Les deux colonnes sont
         # triées chacune de leur côté : le 2e nom ne correspond pas forcément au
         # 2e identifiant. Le lien exact nom-identifiant reste dans le JSON.
@@ -618,6 +645,7 @@ def aggregate_municipalities(rows, supplier_names_by_id=None):
             "nb_annulations": tags["tenderCancellation"],
             "nb_subventions": sum(1 for r in items if r["nature_transaction"] == "subvention ou contribution"),
             "nb_avis_eau": sum(1 for r in items if r["lie_eau"] == "oui"),
+            "nb_avis_pga_eau": sum(1 for r in items if r["pga_eau"] == "oui"),
             "nb_identifiants_fournisseurs": len(fournisseurs),
             "nb_achats_avec_montant": len(montants),
             "montant_total_achats": round(sum(montants), 2) if montants else None,
@@ -679,7 +707,7 @@ def build_context_rows(summaries, rows):
     return context
 
 
-def merge_context_rows(context_rows, source_rows):
+def merge_context_rows(context_rows, source_rows, absents=None):
     """Reporte le contexte saisi à la main sur les organismes de l'export.
 
     Le principe : ne jamais rattacher une ligne de contexte au mauvais
@@ -687,15 +715,19 @@ def merge_context_rows(context_rows, source_rows):
 
     Pour chaque organisme, on cherche sa ligne de contexte dans cet ordre :
       1. les mêmes identifiants d'acheteur, peu importe leur ordre;
-      2. sinon, au moins un identifiant en commun. On accepte en prévenant,
-         et le nom n'est pas comparé. C'est le cas de la Ville de Montréal,
-         dont la liste d'identifiants change d'un export à l'autre (31 dans
-         celui de la semaine, 36 dans celui d'août). Si ces identifiants
-         mènent à plusieurs lignes, on refuse;
+      2. sinon, au moins un identifiant en commun et le même nom nettoyé. On
+         accepte en prévenant. C'est le cas de la Ville de Montréal, dont la
+         liste d'identifiants change d'un export à l'autre (31 dans celui de la
+         semaine, 36 dans celui d'août). Si le nom diffère, ou si ces
+         identifiants mènent à plusieurs lignes, on refuse : un identifiant
+         réutilisé ne doit pas suffire à donner la population d'un organisme à
+         un autre;
       3. sinon, le même nom, mais seulement si la ligne de contexte n'a aucun
          identifiant. Si elle en a d'autres, on refuse : ce pourrait être un
          autre organisme qui porte le même nom;
       4. sinon, l'organisme est nouveau et ses cases restent « À compléter ».
+         Si une liste absents est fournie, on l'y range, pour pouvoir l'ajouter
+         ensuite au fichier de contexte (voir append_context_rows).
 
     Seules les cases remplies sont reportées : une valeur saisie n'est jamais
     remplacée par « À compléter ». Ce lien est technique; ce n'est ni un code
@@ -737,13 +769,16 @@ def merge_context_rows(context_rows, source_rows):
             candidates = by_name.get(name, [])
             communs = {sid for sid in ids if sid in owner_by_id}
             if communs:
-                # Au moins un identifiant en commun : on retient cette ligne en
-                # prévenant, car la liste des acheteurs a changé depuis la saisie.
+                # Au moins un identifiant en commun et le même nom : on retient
+                # cette ligne en prévenant, car la liste des acheteurs a changé.
                 proprietaires = {id(owner_by_id[sid]): owner_by_id[sid] for sid in communs}
                 if len(proprietaires) > 1 or len(candidates) > 1:
                     raise ValueError(f"Correspondance de contexte incertaine pour {name}; "
                                      "plusieurs lignes de contexte visent cet organisme.")
                 source = next(iter(proprietaires.values()))
+                if clean_org_name(source.get("organisme")) != name:
+                    raise ValueError(f"Correspondance de contexte incertaine pour {name} : un identifiant "
+                                     f"est commun avec « {source.get('organisme')} », mais le nom diffère.")
                 anciens = buyer_ids(source)
                 print(f"  contexte : liste d'acheteurs modifiée pour {name} "
                       f"({len(anciens)} identifiants enregistrés, {len(ids)} dans cet export)")
@@ -760,8 +795,45 @@ def merge_context_rows(context_rows, source_rows):
                 value = source.get(field, "")
                 if clean_text(value) and clean_text(value) != "À compléter":
                     result[field] = value
+        elif absents is not None:
+            absents.append(result)
         merged.append(result)
     return merged
+
+
+def append_context_rows(source_path, rows, dossier_sauvegarde=DOSSIER_SORTIES):
+    """Ajoute à la fin du fichier de contexte les organismes qu'il ne connaît pas encore.
+
+    Les lignes existantes ne sont jamais modifiées. Avant d'écrire, on copie
+    l'ancien fichier dans le dossier de sauvegarde ; après, on vérifie que le
+    début du fichier est resté identique octet pour octet, sinon on restaure la
+    copie et on s'arrête. Les nouvelles lignes arrivent avec toutes leurs cases
+    de contexte à « À compléter ». Retourne le nombre de lignes ajoutées.
+    """
+    if not rows:
+        return 0
+    source_path = Path(source_path)
+    avant = source_path.read_bytes()
+    with source_path.open("r", encoding="utf-8-sig", newline="") as file:
+        fields = csv.DictReader(file).fieldnames
+    Path(dossier_sauvegarde).mkdir(exist_ok=True)
+    sauvegarde = Path(dossier_sauvegarde) / (source_path.name + ".avant_ajout")
+    shutil.copy2(source_path, sauvegarde)
+
+    nouvelles = [{field: row.get(field, "") if field in ("organisme", "buyer_ids")
+                  else ("À compléter" if field in CONTEXT_FIELDS else "")
+                  for field in fields} for row in rows]
+    # En UTF-8 simple, pas « utf-8-sig » : en mode ajout, la signature BOM se
+    # retrouverait au milieu du fichier.
+    with source_path.open("a", encoding="utf-8", newline="") as file:
+        if avant and not avant.endswith(b"\n"):
+            file.write("\r\n")
+        csv.DictWriter(file, fieldnames=fields).writerows(nouvelles)
+
+    if not source_path.read_bytes().startswith(avant):
+        shutil.copy2(sauvegarde, source_path)
+        raise ValueError("Le début du fichier de contexte a changé : ajout annulé, ancien fichier restauré.")
+    return len(nouvelles)
 
 
 def load_context_source(source_path, generated_path, context_rows):
@@ -993,10 +1065,13 @@ def main():
     context_rows = build_context_rows(summaries, details)
     quality_rows = build_quality_rows(details, supplier_names_by_id)
     context_source = load_context_source(CONTEXT_SOURCE_CSV, CONTEXT_CSV, context_rows)
-    context_rows = merge_context_rows(context_rows, context_source)
+    nouveaux = []
+    context_rows = merge_context_rows(context_rows, context_source, absents=nouveaux)
 
-    # Toutes les vérifications ont réussi. À partir d'ici, on n'écrit plus que
-    # dans sorties/; le fichier de contexte n'est plus touché.
+    # Toutes les vérifications ont réussi. On ajoute d'abord au fichier de
+    # contexte les organismes qu'il ne connaît pas encore, sans toucher aux
+    # lignes existantes ; ensuite, on n'écrit plus que dans sorties/.
+    ajoutes = append_context_rows(CONTEXT_SOURCE_CSV, nouveaux)
     write_csv(details_csv, details)
     write_csv(summary_csv, summaries)
     write_csv(context_csv, context_rows)
@@ -1008,7 +1083,8 @@ def main():
     print("\nQuatre CSV de sortie :")
     for path in (details_csv, summary_csv, context_csv, quality_csv):
         print(f"- {path}")
-    print(f"Contexte à saisir dans {CONTEXT_SOURCE_CSV} (lu sans réécriture s'il existe).")
+    print(f"Contexte à saisir dans {CONTEXT_SOURCE_CSV} : {ajoutes} nouvel(s) organisme(s) ajouté(s) "
+          "à la fin, lignes existantes inchangées.")
 
 
 if __name__ == "__main__":

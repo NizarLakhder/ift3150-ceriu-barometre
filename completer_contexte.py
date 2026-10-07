@@ -35,8 +35,12 @@ Ce que le programme s'interdit :
 
   - remplacer une valeur déjà saisie : il ne remplit que les cases encore
     « À compléter »;
-  - choisir au hasard : quand un nom correspond à plusieurs organismes du
-    répertoire, il ne remplit rien et signale le cas;
+  - choisir au hasard : quand un nom correspond à plusieurs municipalités du
+    répertoire, il ne tranche qu'avec un indice publié, le code postal donné
+    par le SEAO ou une désignation distinctive écrite dans le nom (Canton,
+    Village, Ville, Paroisse). Sans indice, il ne remplit rien et signale le cas.
+    Les codes postaux sont lus dans les vues produites par analyser_seao.py
+    (sorties/*enrichir*.csv) : lancer l'analyse avant ce programme;
   - inventer : la proximité d'un cours d'eau et le type de milieu restent
     à compléter, puisqu'aucun de ces fichiers ne les fournit.
 
@@ -149,9 +153,6 @@ def cle_organisme(nom):
     nom, comme dans « Ville de Joliette - Approvisionnement ».
     """
     cle = normaliser(nom)
-    # Sans effet pour l'instant : normaliser() a déjà remplacé « / » et « ( »
-    # par des espaces, donc ce motif ne trouve jamais rien.
-    cle = re.sub(r"\s*[/(].*$", "", cle)
     cle = re.sub(r"\b(approvisionnement|service des acquisitions)\b", "", cle)
     # Plusieurs passages, pour les noms qui empilent désignations et articles,
     # comme « Municipalité de la Paroisse de Saint-... ».
@@ -182,8 +183,8 @@ def construire_index(municipalites, mrc, perimunicipaux):
     """Associe chaque clé de nom à la liste des organismes qui la portent.
 
     Une clé partagée reste volontairement ambiguë : il existe par exemple deux
-    Saint-Donat au Québec. main() essaiera de départager avec la désignation,
-    et signalera le cas s'il n'y arrive pas. Je préfère un programme qui dit
+    Saint-Donat au Québec. main() essaiera de départager (voir departager), et
+    signalera le cas s'il n'y arrive pas. Je préfère un programme qui dit
     « je ne sais pas » à un programme qui devine.
     """
     index = {}
@@ -199,9 +200,76 @@ def construire_index(municipalites, mrc, perimunicipaux):
     for organisme in perimunicipaux:
         nom = organisme.findtext("NOM_L1", "").strip()
         if nom:
-            index.setdefault(cle_organisme(nom), []).append(("organisme périmunicipal", {"nom": nom}))
+            entrees = index.setdefault(cle_organisme(nom), [])
+            # Le fichier du ministère liste certains organismes deux fois, comme la
+            # Société de transport de l'Outaouais : une même entrée ne compte qu'une fois.
+            if ("organisme périmunicipal", {"nom": nom}) not in entrees:
+                entrees.append(("organisme périmunicipal", {"nom": nom}))
 
     return index
+
+
+# Désignations qui distinguent vraiment deux homonymes. « Municipalité » n'en fait
+# pas partie : le SEAO l'emploie aussi pour des paroisses, comme Sainte-Françoise
+# ou Saint-Isidore. On ne regarde que le début du nom (« Ville de… »,
+# « Municipalité du Canton de… »), et un mot suivi d'un trait d'union ne compte
+# pas : « Municipalité de Ville-Marie » ne désigne pas une ville.
+DESIGNATION_DISTINCTIVE = re.compile(
+    r"^(?:municipalite\s+(?:de\s+la\s+|du\s+|de\s+)?)?(canton|village|ville|paroisse)(?![-\w])")
+
+
+def normaliser_code_postal(code):
+    """« g0l 3b0 » devient « G0L3B0 », pour comparer des codes écrits différemment."""
+    return re.sub(r"\s+", "", code or "").upper()
+
+
+def departager(nom, correspondances, codes_postaux):
+    """Choisit entre plusieurs municipalités homonymes, seulement si un indice les sépare.
+
+    Deux indices, dans cet ordre :
+      1. le code postal publié dans le SEAO, comparé à celui de l'hôtel de ville
+         dans le répertoire (mcodpos);
+      2. une désignation distinctive écrite au début du nom SEAO (voir
+         DESIGNATION_DISTINCTIVE), comparée à celle du répertoire (mdes).
+    Si les deux indices se contredisent, ou si aucun ne sépare les candidats, on
+    ne choisit pas. Retourne (correspondance, explication), ou (None, None).
+    """
+    if any(type_organisme != "municipalité" for type_organisme, _ in correspondances):
+        return None, None
+    # Minuscules et sans accents, mais en gardant les traits d'union (voir plus haut).
+    sans_accents = "".join(c for c in unicodedata.normalize("NFD", (nom or "").lower())
+                           if unicodedata.category(c) != "Mn")
+    m = DESIGNATION_DISTINCTIVE.match(re.sub(r"\s+", " ", sans_accents).strip())
+    designation = m.group(1).capitalize() if m else None
+
+    par_code = [c for c in correspondances if normaliser_code_postal(c[1].get("mcodpos")) in codes_postaux]
+    if len(par_code) == 1:
+        trouve = par_code[0]
+        if designation and trouve[1].get("mdes") != designation:
+            return None, None
+        return trouve, f"code postal {normaliser_code_postal(trouve[1].get('mcodpos'))}"
+    if designation:
+        par_designation = [c for c in correspondances if c[1].get("mdes") == designation]
+        if len(par_designation) == 1:
+            return par_designation[0], f"désignation « {designation} »"
+    return None, None
+
+
+def lire_codes_postaux_seao(dossier=DOSSIER_SORTIES):
+    """Retourne {identifiant d'acheteur : codes postaux publiés dans le SEAO}.
+
+    Le fichier de contexte ne contient pas d'adresse : on la reprend dans les
+    vues produites par analyser_seao.py, pour toutes les périodes analysées.
+    """
+    codes = {}
+    for chemin in sorted(Path(dossier).glob("*enrichir*.csv")):
+        with chemin.open(encoding="utf-8-sig", newline="") as fichier:
+            for ligne in csv.DictReader(fichier):
+                for identifiant in (ligne.get("buyer_ids") or "").split("|"):
+                    for code in (ligne.get("code_postal_seao") or "").split("|"):
+                        if identifiant.strip() and code.strip():
+                            codes.setdefault(identifiant.strip(), set()).add(normaliser_code_postal(code))
+    return codes
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +332,27 @@ def valeurs_mrc(ligne, source):
     }
 
 
+def remplir_ligne(ligne, valeurs):
+    """Reporte les valeurs trouvées dans les seules cases vides ou encore « À compléter ».
+
+    C'est la règle la plus importante du programme : une valeur déjà présente,
+    saisie à la main ou lors d'une exécution précédente, n'est jamais remplacée,
+    même si le répertoire donne autre chose. Une valeur vide n'est pas reportée.
+    Retourne (cases remplies, valeurs déjà présentes laissées intactes).
+    """
+    remplies, intactes = 0, 0
+    for colonne, valeur in valeurs.items():
+        if not valeur:
+            continue
+        actuelle = (ligne.get(colonne) or "").strip()
+        if actuelle and actuelle != A_COMPLETER:
+            intactes += 1
+            continue
+        ligne[colonne] = valeur
+        remplies += 1
+    return remplies, intactes
+
+
 def construire_donnees_eau(fuites, validite, consommation):
     """Regroupe les trois fichiers de la Stratégie par code géographique.
 
@@ -311,6 +400,8 @@ def main():
         lire_csv(contenus["consommation"]) if "consommation" in contenus else [],
     )
     index = construire_index(municipalites, mrc, perimunicipaux)
+    codes_postaux = lire_codes_postaux_seao()
+    print(f"  codes postaux SEAO lus pour {len(codes_postaux)} identifiants d'acheteur")
 
     # Mention de provenance écrite dans chaque case remplie : quels fichiers,
     # de quelle date, et quel jour le contexte a été complété.
@@ -324,7 +415,7 @@ def main():
         colonnes = lecteur.fieldnames
         lignes = list(lecteur)
 
-    # remplis compte des organismes; deja_saisis compte des cases.
+    # remplis compte des organismes; deja_saisis compte des cases (voir remplir_ligne).
     remplis, deja_saisis, ambigus, absents = 0, 0, [], []
 
     for ligne in lignes:
@@ -342,6 +433,15 @@ def main():
             if len(filtrees) == 1:
                 correspondances = filtrees
 
+        # Plusieurs municipalités homonymes : on cherche un indice publié qui les sépare.
+        methode = None
+        if len(correspondances) > 1:
+            codes_ligne = set().union(*[codes_postaux.get(i.strip(), set())
+                                        for i in ligne["buyer_ids"].split("|")])
+            choix, methode = departager(ligne["organisme"], correspondances, codes_ligne)
+            if choix:
+                correspondances = [choix]
+
         if len(correspondances) > 1:
             details = "; ".join(t for t, _ in correspondances)
             ambigus.append((ligne["organisme"], f"{len(correspondances)} correspondances : {details}"))
@@ -349,7 +449,8 @@ def main():
 
         type_organisme, trouve = correspondances[0]
         if type_organisme == "municipalité":
-            valeurs = valeurs_municipalite(trouve, eau, source)
+            # Quand un homonyme a été départagé, la source dit comment, pour qu'on puisse le vérifier.
+            valeurs = valeurs_municipalite(trouve, eau, source + (f"; homonyme départagé par {methode}" if methode else ""))
         elif type_organisme == "MRC ou communauté":
             valeurs = valeurs_mrc(trouve, source)
         else:
@@ -358,17 +459,9 @@ def main():
                             "organisme périmunicipal : ni population ni superficie dans le répertoire"))
             continue
 
-        modifie = False
-        for colonne, valeur in valeurs.items():
-            if not valeur:
-                continue
-            actuelle = (ligne.get(colonne) or "").strip()
-            if actuelle and actuelle != A_COMPLETER:
-                deja_saisis += 1          # une valeur saisie à la main n'est jamais remplacée
-                continue
-            ligne[colonne] = valeur
-            modifie = True
-        if modifie:
+        remplies, intactes = remplir_ligne(ligne, valeurs)
+        deja_saisis += intactes
+        if remplies:
             remplis += 1
 
     # Sauvegarde avant d'écrire, pour pouvoir revenir en arrière. Attention : il
@@ -387,7 +480,7 @@ def main():
 
     print(f"\nOrganismes dans le contexte         : {len(lignes)}")
     print(f"Organismes enrichis                 : {remplis}")
-    print(f"Valeurs manuelles laissées intactes : {deja_saisis}")
+    print(f"Valeurs déjà présentes, intactes : {deja_saisis}")
     print(f"Noms ambigus                        : {len(ambigus)}")
     print(f"Sans correspondance                 : {len(absents)}")
     print(f"\n{CONTEXTE_CSV} mis à jour (sauvegarde dans {DOSSIER_SORTIES / (CONTEXTE_CSV.name + '.bak')})")

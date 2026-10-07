@@ -191,6 +191,46 @@ class IdentifierValidationTests(unittest.TestCase):
             ])])
 
 
+class PgaEauDetectionTests(unittest.TestCase):
+    """Les titres réels des exports : les cinq PGA-Eau doivent être reconnus, les pièges ignorés."""
+
+    def test_real_pga_eau_titles_are_recognized(self):
+        titres = [
+            "Services professionnels d'accompagnement à la préparation du Plan de gestion des actifs "
+            "municipaux en eau (PGA-Eau)",                                                   # Nicolet
+            "Services professionnels pour l’élaboration d’un plan de gestion des actifs en eau (PGA-Eau) "
+            "pour la Ville de Sept-Îles",                                                     # Sept-Îles
+            "Services professionnels pour l’élaboration d’un plan de gestion des actifs en eau (PGA – Eau) "
+            "pour la Ville de Windsor",                                                       # tiret long
+            "Services professionnels pour l'accompagnement dans l'élaboration d'un plan de gestion des "
+            "actifs en eau",                                                                  # sans acronyme
+            "Renforcement stratégique pour l'élaboration du PGA-EAU",                         # Matagami
+        ]
+        for titre in titres:
+            with self.subTest(titre=titre[:60]):
+                self.assertTrue(analyse.is_pga_eau(titre))
+
+    def test_real_traps_are_not_taken_for_pga_eau(self):
+        pieges = [
+            "MANDAT D'ACCOMPGANEMENT POUR LA MISE EN PLACE D'UN COMITÉ CONSULTATIF TI",   # STM, faute de frappe
+            "Plan de gestion des eaux pluviales",                                         # pas d'« actif »
+            "Services professionnels pour la mise en place d’un plan de gestion des actifs et d’un plan "
+            "directeur de maintien des actifs des bâtiments municipaux",                  # Dollard, bâtiments
+            "Réhabilitation du puits P3 et option de remplacement de la tête du puits",   # eau, mais pas un PGA
+        ]
+        for titre in pieges:
+            with self.subTest(titre=titre[:60]):
+                self.assertFalse(analyse.is_pga_eau(titre))
+
+    def test_pga_eau_column_and_count_per_organism(self):
+        pga = municipal_release()
+        pga["tender"]["title"] = "Élaboration du plan de gestion des actifs en eau (PGA-Eau)"
+        autre = municipal_release("ocds-test-2")
+        rows, names = rows_and_names([pga, autre])
+        self.assertEqual([row["pga_eau"] for row in rows], ["oui", "non"])
+        self.assertEqual(analyse.aggregate_municipalities(rows, names)[0]["nb_avis_pga_eau"], 1)
+
+
 def context_row(name="Ville de Test", buyer_ids="OP-1", **values):
     """Fabrique une ligne de contexte où tout est « À compléter », sauf les valeurs données."""
     row = {"organisme": name, "buyer_ids": buyer_ids,
@@ -271,11 +311,18 @@ class ContextPreservationTests(unittest.TestCase):
     def test_partly_changed_identifier_set_keeps_the_context(self):
         # Un organisme peut publier sous plus ou moins d'identifiants selon
         # l'export, comme la Ville de Montréal (31 identifiants une semaine,
-        # 36 le mois d'août). Un identifiant en commun suffit alors à retrouver
-        # sa ligne de contexte.
+        # 36 le mois d'août). Le même nom et un identifiant en commun suffisent
+        # alors à retrouver sa ligne de contexte.
         source = context_row(buyer_ids="OP-1 | OP-2", population="1234")
         merged = analyse.merge_context_rows([context_row()], [source])[0]
         self.assertEqual(merged["population"], "1234")
+
+    def test_shared_identifier_with_another_name_is_rejected(self):
+        # Un identifiant commun ne suffit pas si le nom diffère : la population
+        # d'un organisme ne doit jamais passer à un autre sans vérification.
+        source = context_row("Autre ville", "OP-1 | OP-2", population="1234")
+        with self.assertRaises(ValueError):
+            analyse.merge_context_rows([context_row(buyer_ids="OP-1")], [source])
 
     def test_identifier_set_with_nothing_in_common_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -291,6 +338,32 @@ class ContextPreservationTests(unittest.TestCase):
                 analyse.load_context_source(source, generated, [context_row()])
             self.assertFalse(source.exists())
             self.assertEqual(generated.read_bytes(), before)
+
+    def test_new_organisms_are_appended_without_changing_existing_lines(self):
+        # Un nouvel export fait apparaître un organisme inconnu : il est ajouté à
+        # la fin du fichier, et les lignes déjà saisies restent identiques.
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.csv"
+            absente = Path(directory) / "absente.csv"
+            analyse.write_csv(source, [context_row(population="1234", notes="Saisie manuelle")])
+            before = source.read_bytes()
+            vue = [context_row(), context_row("Ville nouvelle", "OP-7")]
+
+            nouveaux = []
+            analyse.merge_context_rows(vue, analyse.load_context_source(source, absente, vue), absents=nouveaux)
+            self.assertEqual([row["organisme"] for row in nouveaux], ["Ville nouvelle"])
+            self.assertEqual(analyse.append_context_rows(source, nouveaux, directory), 1)
+            self.assertTrue(source.read_bytes().startswith(before))
+
+            relu = analyse.load_context_source(source, absente, vue)
+            self.assertEqual(relu[0]["population"], "1234")
+            self.assertEqual(relu[0]["notes"], "Saisie manuelle")
+            self.assertEqual((relu[1]["organisme"], relu[1]["population"]), ("Ville nouvelle", "À compléter"))
+
+            # Une deuxième analyse du même export n'ajoute plus rien.
+            encore = []
+            analyse.merge_context_rows(vue, relu, absents=encore)
+            self.assertEqual(encore, [])
 
 
 if __name__ == "__main__":
