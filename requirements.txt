@@ -1,1 +1,8 @@
+# Site de suivi (docs/)
 zensical
+
+# Rapprochement des noms tolérant aux fautes (completer_contexte.py)
+rapidfuzz
+
+# Base de données PostgreSQL (charger_base.py)
+psycopg[binary]
