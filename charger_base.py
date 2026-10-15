@@ -52,6 +52,7 @@ from psycopg.types.json import Jsonb
 
 import analyser_seao
 import completer_contexte
+from utilitaires import clean_org_name, clean_text, date_from_release_id, valid_date
 
 SCHEMA_SQL = Path("schema.sql")
 REGROUPEMENTS_CSV = Path("regroupements.csv")
@@ -95,10 +96,10 @@ def instant(valeur):
     """Une date ISO du SEAO convertie en date et heure, ou None si elle est absente ou fictive.
 
     Le SEAO emploie « 0001-01-01 » comme date fictive : on l'écarte, comme
-    analyser_seao.valid_date.
+    utilitaires.valid_date.
     """
     valeur = texte(valeur)
-    if valeur is None or not analyser_seao.valid_date(valeur):
+    if valeur is None or not valid_date(valeur):
         return None
     try:
         return datetime.fromisoformat(valeur)
@@ -157,7 +158,7 @@ def lignes_de_la_fiche(release, fichier):
     un seul acheteur, un seul fournisseur par attribution, un contrat relié à
     une attribution de la même fiche.
     """
-    ocid, release_id = analyser_seao.clean_text(release.get("ocid")), analyser_seao.clean_text(release.get("id"))
+    ocid, release_id = clean_text(release.get("ocid")), clean_text(release.get("id"))
     cle = (ocid, release_id)
     acheteurs = [p for p in release.get("parties", []) if "buyer" in p.get("roles", [])]
     if len(acheteurs) != 1:
@@ -173,8 +174,8 @@ def lignes_de_la_fiche(release, fichier):
 
     fiche = {
         "ocid": ocid, "release_id": release_id, "fichier_source": fichier,
-        "date_deduite_numero": (date.fromisoformat(analyser_seao.date_from_release_id(release))
-                                if analyser_seao.date_from_release_id(release) else None),
+        "date_deduite_numero": (date.fromisoformat(date_from_release_id(release))
+                                if date_from_release_id(release) else None),
         "date_fiche": instant(release.get("date")),
         "acheteur_id": acheteurs[0]["id"],
         "numero_avis": texte(tender.get("id")),
@@ -262,8 +263,8 @@ def lignes_de_la_fiche(release, fichier):
     # L'organisme se déduit du nom, avec la règle même d'analyser_seao.py : c'est
     # sous ce nom qu'il figure dans contexte_municipalites.csv.
     acheteur = {"acheteur_id": acheteurs[0]["id"],
-                "organisme": analyser_seao.clean_org_name(acheteurs[0].get("name")),
-                "nom_seao": analyser_seao.clean_text(acheteurs[0].get("name"))}
+                "organisme": clean_org_name(acheteurs[0].get("name")),
+                "nom_seao": clean_text(acheteurs[0].get("name"))}
 
     return {"fiche": fiche, "acheteur": acheteur, "tags": tags, "classifications": classifications, "nomenclature": nomenclature,
             "fournisseurs": fournisseurs, "soumissionnaires": soumissionnaires,
@@ -447,9 +448,10 @@ def charger_export(connexion, chemin):
             list({c["code"]: {"code": c["code"], "libelle": c["libelle"]} for c in toutes("classifications")}.values()))
 
     # Les acheteurs. Le contexte ne connaît pas toujours tous les identifiants
-    # d'un organisme : Montréal en a 36 dans l'export de la semaine, mais 31
-    # dans le contexte, dont aucune ligne n'est jamais modifiée. Un identifiant
-    # inconnu est donc rattaché par le nom de l'organisme, comme le fait
+    # d'un organisme : Montréal en a 36 dans l'export d'août, mais le contexte,
+    # où les identifiants d'une ligne existante ne sont jamais mis à jour, ne
+    # connaît que les 31 de la semaine du 7 septembre. Un identifiant inconnu
+    # est donc rattaché par le nom de l'organisme, comme le fait
     # analyser_seao.py. Un organisme absent du contexte arrête tout.
     organismes = dict(connexion.execute("SELECT nom, organisme_id FROM organismes.organisme").fetchall())
     connus = dict(connexion.execute("SELECT acheteur_id, organisme_id FROM organismes.acheteur").fetchall())
@@ -477,8 +479,13 @@ def charger_export(connexion, chemin):
 
 
 def version_des_regles():
-    """L'empreinte d'analyser_seao.py : elle change dès qu'une règle change."""
-    return "analyser_seao.py " + empreinte(Path(analyser_seao.__file__))[:12]
+    """L'empreinte d'analyser_seao.py et d'utilitaires.py : elle change dès qu'une règle change.
+
+    Les règles sont dans analyser_seao.py, mais elles s'appuient sur les
+    outils d'utilitaires.py, comme la lecture des dates : les deux comptent.
+    """
+    fichiers = [Path(analyser_seao.__file__), Path(analyser_seao.__file__).with_name("utilitaires.py")]
+    return "analyser_seao.py " + hashlib.sha256(b"".join(f.read_bytes() for f in fichiers)).hexdigest()[:12]
 
 
 def classer_fiches(connexion):

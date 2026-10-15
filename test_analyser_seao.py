@@ -359,6 +359,8 @@ class ContextPreservationTests(unittest.TestCase):
             self.assertEqual(relu[0]["population"], "1234")
             self.assertEqual(relu[0]["notes"], "Saisie manuelle")
             self.assertEqual((relu[1]["organisme"], relu[1]["population"]), ("Ville nouvelle", "À compléter"))
+            # La note de la nouvelle ligne naît vide : il n'y a encore rien à signaler.
+            self.assertEqual(relu[1]["notes"], "")
 
             # Une deuxième analyse du même export n'ajoute plus rien.
             encore = []

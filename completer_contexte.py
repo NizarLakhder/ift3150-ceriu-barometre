@@ -59,6 +59,19 @@ Ce que le programme s'interdit :
   - inventer : la proximité d'un cours d'eau et le type de milieu restent
     à compléter, puisqu'aucun de ces fichiers ne les fournit.
 
+Une case sans chiffre n'est pas forcément une donnée manquante. Le fichier de
+contexte emploie quatre mots, pour que chacun dise la vérité :
+
+  À compléter    la donnée peut exister, mais on ne l'a pas encore trouvée;
+  Sans objet     le champ ne s'applique pas, comme la MRC dont ferait partie
+                 une MRC, ou les données sur l'eau d'une MRC;
+  Hors MRC       ce que dit le répertoire pour les villes qui ne font partie
+                 d'aucune MRC, comme Montréal, Laval ou Longueuil;
+  Aucune donnée  ce que publie la Stratégie pour une municipalité dont elle ne
+                 donne aucune valeur.
+
+Une note vide reste vide : il n'y a simplement rien à signaler.
+
 Avant d'écrire, il copie le contexte actuel dans
 sorties/contexte_municipalites.csv.bak. Il n'y a qu'une sauvegarde, remplacée
 à chaque exécution. Les organismes qu'il n'a pas pu rattacher sont listés dans
@@ -108,7 +121,12 @@ FICHIERS = {
                      "Stratégie d'économie d'eau potable, « Consommation résidentielle 2024, par classe de population »"),
 }
 
-A_COMPLETER = "À compléter"
+# Les étiquettes du fichier de contexte. Une case vide de sens n'est pas une
+# donnée manquante : chacune dit pourquoi elle n'a pas de valeur chiffrée.
+A_COMPLETER = "À compléter"      # la donnée peut exister, on ne l'a pas encore trouvée
+SANS_OBJET = "Sans objet"        # le champ ne s'applique pas, comme la MRC d'une MRC
+HORS_MRC = "Hors MRC"            # ce que dit le répertoire des villes qui ne font partie d'aucune MRC
+AUCUNE_DONNEE = "Aucune donnée"  # ce que publie la Stratégie pour une municipalité sans données sur l'eau
 
 
 # ---------------------------------------------------------------------------
@@ -686,14 +704,27 @@ def valeurs_municipalite(ligne, eau, source):
         if valeur not in (None, "", "NULL"):
             morceaux.append(f"{etiquette} {valeur}{unite}")
 
+    # Trois cas bien différents pour l'eau : des valeurs publiées; la
+    # municipalité publiée sans aucune valeur, ce qu'on dit tel quel; ou la
+    # municipalité absente des fichiers, et la case reste à compléter, car une
+    # prochaine édition de la Stratégie pourrait la contenir.
+    if morceaux:
+        eau_texte = "; ".join(morceaux)
+    elif code in eau:
+        eau_texte = AUCUNE_DONNEE
+    else:
+        eau_texte = ""
+
     return {
         "code_geographique": code,
         "population": ligne.get("mpopul", ""),
         "classe_taille": donnees_eau.get("classe", ""),
         "superficie_km2": ligne.get("msuperf", ""),
         "region_administrative": ligne.get("regadm", ""),
-        "mrc": ligne.get("mrc", ""),
-        "particularites_infrastructures": "; ".join(morceaux),
+        # Une case MRC vide dans le répertoire n'est pas un oubli : Montréal,
+        # Laval ou Longueuil, par exemple, ne font partie d'aucune MRC.
+        "mrc": ligne.get("mrc") or HORS_MRC,
+        "particularites_infrastructures": eau_texte,
         "source_contexte": source,
     }
 
@@ -704,12 +735,21 @@ def valeurs_mrc(ligne, source):
     Le fichier des MRC a ses propres noms de colonnes (mrcpopul, mrcregion,
     msupf), différents de ceux du fichier des municipalités. Il ne contient
     rien sur l'eau.
+
+    Trois colonnes ne s'appliquent pas à une MRC : la MRC dont elle ferait
+    partie, et la classe de taille et les données sur l'eau, que la Stratégie
+    publie municipalité par municipalité. Elles reçoivent « Sans objet ». Une
+    communauté métropolitaine couvre plusieurs régions : le répertoire ne lui
+    en donne aucune, d'où « Sans objet » aussi.
     """
     return {
         "code_geographique": (ligne.get("mrccod") or "").strip(),
         "population": ligne.get("mrcpopul", ""),
         "superficie_km2": ligne.get("msupf", ""),
-        "region_administrative": ligne.get("mrcregion", ""),
+        "region_administrative": (ligne.get("mrcregion") or "").strip() or SANS_OBJET,
+        "mrc": SANS_OBJET,
+        "classe_taille": SANS_OBJET,
+        "particularites_infrastructures": SANS_OBJET,
         "source_contexte": source,
     }
 
@@ -733,6 +773,20 @@ def remplir_ligne(ligne, valeurs):
         ligne[colonne] = valeur
         remplies += 1
     return remplies, intactes
+
+
+def vider_note(ligne):
+    """Une note encore « À compléter » devient une case vide.
+
+    Les notes sont un champ libre, pas une donnée à trouver : une note vide
+    veut seulement dire qu'il n'y a rien à signaler. L'étiquette « À compléter »
+    y faisait croire qu'il manquait des centaines de valeurs. Une note écrite à
+    la main n'est jamais touchée. Retourne True si la note a été vidée.
+    """
+    if (ligne.get("notes") or "").strip() == A_COMPLETER:
+        ligne["notes"] = ""
+        return True
+    return False
 
 
 def construire_donnees_eau(fuites, validite, consommation):
@@ -808,8 +862,10 @@ def main():
     # ambigus et absents : les cas qu'il faut encore trancher à la main. sans_objet : les
     # organismes non municipaux, pour lesquels le répertoire n'a rien à reporter.
     remplis, rapproches, deja_saisis, ambigus, absents, sans_objet = 0, 0, 0, [], [], []
+    notes_videes = 0
 
     for ligne in lignes:
+        notes_videes += vider_note(ligne)
         correspondance, methode, echec = rattacher(ligne, index, index_tolerant, par_code, codes_postaux)
         if echec:
             genre, raison = echec
@@ -862,6 +918,8 @@ def main():
     print(f"  candidats trouvés, non retenus    : {len(ambigus)}")
     print(f"  municipalité ou MRC introuvable   : {len(absents)}")
     print(f"Organismes non municipaux           : {len(sans_objet)}  (rien à compléter)")
+    if notes_videes:
+        print(f"Notes « À compléter » vidées        : {notes_videes}  (rien à signaler)")
     print(f"\n{CONTEXTE_CSV} mis à jour (sauvegarde dans {DOSSIER_SORTIES / (CONTEXTE_CSV.name + '.bak')})")
     print(f"{A_VERIFIER_CSV} liste les cas à traiter à la main.")
     print("La proximité d'un cours d'eau et le type de milieu restent à documenter :")

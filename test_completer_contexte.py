@@ -337,6 +337,49 @@ class RattachementTests(unittest.TestCase):
         self.assertTrue(methode.startswith("nom rapproché"))
 
 
+class EtiquettesTests(unittest.TestCase):
+    """Une case sans chiffre dit pourquoi : à compléter, sans objet, hors MRC ou aucune donnée."""
+
+    def test_fields_that_do_not_apply_to_an_mrc_are_marked(self):
+        valeurs = contexte.valeurs_mrc({"mrccod": "AR930", "mrcpopul": "53866", "msupf": "2789.5",
+                                        "mrcregion": "Saguenay--Lac-Saint-Jean (02)"}, "source")
+        self.assertEqual(valeurs["region_administrative"], "Saguenay--Lac-Saint-Jean (02)")
+        for champ in ("mrc", "classe_taille", "particularites_infrastructures"):
+            self.assertEqual(valeurs[champ], contexte.SANS_OBJET)
+
+    def test_metropolitan_community_has_no_single_region(self):
+        # Cas réel : le répertoire ne donne aucune région aux deux communautés métropolitaines.
+        valeurs = contexte.valeurs_mrc({"mrccod": "CM663", "mrcpopul": "4305251", "mrcregion": ""}, "source")
+        self.assertEqual(valeurs["region_administrative"], contexte.SANS_OBJET)
+
+    def test_town_outside_any_mrc_is_marked(self):
+        # Cas réel : Montréal ne fait partie d'aucune MRC, et le répertoire laisse la case vide.
+        valeurs = contexte.valeurs_municipalite({"mcode": "66023", "mpopul": "1913561", "mrc": ""}, {}, "source")
+        self.assertEqual(valeurs["mrc"], contexte.HORS_MRC)
+
+    def test_water_data_published_without_values_says_so(self):
+        eau = {"12345": {"classe": "Aucune donnée", "pop_desservie": "NULL", "validite": ""}}
+        valeurs = contexte.valeurs_municipalite({"mcode": "12345", "mrc": "MRC Test (123)"}, eau, "source")
+        self.assertEqual(valeurs["classe_taille"], "Aucune donnée")
+        self.assertEqual(valeurs["particularites_infrastructures"], contexte.AUCUNE_DONNEE)
+
+    def test_town_missing_from_the_water_files_stays_to_complete(self):
+        # Absente des fichiers, la donnée pourrait venir dans une prochaine édition : rien n'est inscrit.
+        valeurs = contexte.valeurs_municipalite({"mcode": "14082", "mrc": "MRC Kamouraska (140)"}, {}, "source")
+        self.assertEqual(valeurs["particularites_infrastructures"], "")
+
+    def test_labels_never_replace_a_value_already_written(self):
+        ligne = {"mrc": "MRC saisie à la main", "classe_taille": "À compléter"}
+        contexte.remplir_ligne(ligne, {"mrc": contexte.SANS_OBJET, "classe_taille": contexte.SANS_OBJET})
+        self.assertEqual(ligne, {"mrc": "MRC saisie à la main", "classe_taille": contexte.SANS_OBJET})
+
+    def test_empty_note_becomes_blank_but_a_written_note_is_kept(self):
+        vide, ecrite = {"notes": "À compléter"}, {"notes": "Vérifié par téléphone"}
+        self.assertTrue(contexte.vider_note(vide))
+        self.assertFalse(contexte.vider_note(ecrite))
+        self.assertEqual((vide["notes"], ecrite["notes"]), ("", "Vérifié par téléphone"))
+
+
 class SourcesTests(unittest.TestCase):
     """Lecture des fichiers de référence et des vues produites par l'analyse."""
 
