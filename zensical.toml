@@ -1,11 +1,11 @@
 [project]
-site_name = "Baromètre CERIU &ndash; Projet IFT3150"
+site_name = "Baromètre CERIU (projet IFT3150)"
 site_description = "Suivi du projet IFT3150 : ce que les données publiques permettent d'observer sur les pratiques de gestion d'actifs municipales"
 site_author = "Nizar Lakhder"
 site_url = "https://nizarlakhder.github.io/ift3150-ceriu-barometre/"
 
 copyright = """
-&copy; 2026 Nizar Lakhder &ndash; Projet IFT3150, en collaboration avec le CERIU <br>
+&copy; 2026 Nizar Lakhder. Projet IFT3150, en collaboration avec le CERIU <br>
 Département d'informatique et de recherche opérationnelle <br>
 Université de Montréal
 """
@@ -21,6 +21,9 @@ nav = [
   { "Synthèse" = "synthese.md" },
   { "Références" = "references.md" },
 ]
+
+# Le texte en gris de ce qui reste à confirmer (voir docs/css/a-confirmer.css).
+extra_css = ["css/a-confirmer.css"]
 
 
 # -----------------------------------------------------------------------------

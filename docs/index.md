@@ -71,8 +71,7 @@ Les principaux objectifs sont les suivants :
 
 1. développer un premier prototype d'extraction à partir des données du SEAO;
 2. structurer les informations obtenues de façon cohérente;
-3. vérifier manuellement une partie des résultats;
-4. comparer les résultats avec ceux d'un agent automatisé, notamment Hermes, ainsi qu'avec les informations disponibles au CERIU;
+3. comparer les résultats avec ceux d'un agent automatisé, notamment Hermes, ainsi qu'avec les informations disponibles au CERIU;
 
 ### Méthodologie
 
@@ -80,9 +79,8 @@ Le projet sera réalisé de manière progressive afin de pouvoir valider chaque 
 
 Les principales étapes prévues sont :
 
-1. **Comprendre les données.** Parcourir les exports du SEAO en entier, jamais un échantillon, pour
-   établir leur structure réelle : champs présents ou absents, emplacement des montants, sens des
-   dates.
+1. **Comprendre les données.** Parcourir les exports du SEAO en entier, pour
+   établir leur structure réelle : champs présents ou absents, emplacement des montants, sens des dates.
 2. **Extraire et structurer.** Isoler les acheteurs municipaux et produire des tableaux vérifiables,
    où chaque ligne renvoie à son avis public.
 3. **Ajouter le contexte.** Rattacher chaque organisme à des sources officielles, comme le répertoire
@@ -92,9 +90,11 @@ Les principales étapes prévues sont :
 5. **Comparer.** Confronter les résultats à ceux d'un agent automatisé et aux informations du CERIU.
 6. **Ensuite seulement,** proposer des indicateurs et envisager un baromètre.
 
-Le code d'analyse se trouve à la racine du dépôt : `analyser_seao.py` et `completer_contexte.py`.
-Il n'utilise que la bibliothèque standard de Python, pour que le CERIU puisse le reprendre sans rien
-installer.
+Le code se trouve à la racine du dépôt : `analyser_seao.py` lit les exports du SEAO,
+`completer_contexte.py` y ajoute le contexte municipal, et `charger_base.py` range le tout dans une
+base PostgreSQL. Au départ, il n'utilisait que la bibliothèque standard de Python. Depuis octobre,
+avec l'accord du superviseur, il s'appuie aussi sur deux bibliothèques : `rapidfuzz`, pour
+reconnaître un nom malgré une faute de frappe, et `psycopg`, pour écrire dans la base.
 
 ### Validation et Évaluation
 
@@ -120,7 +120,7 @@ Les seuils de réussite chiffrés restent à préciser avec le superviseur.
 | Activités                      | Début   |   Fin   | Livrable                            | Statut      |
 |--------------------------------|---------|---------|-------------------------------------|-------------|
 | Ouverture de projet            | 4 septembre   | 15 septembre  | Proposition de projet               | ✅ Terminé  |
-| Études préliminaires           | 16 septembre  | 2 octobre     | Diagnostic des données, prototype, rapport au CERIU | 🔄 En cours |
-| Première mise en commun        | 2 octobre     | 2 octobre     | Présentation                        | 🔄 En cours |
-| Suite du projet                | À préciser    | À préciser    | À préciser avec le superviseur      | ⏳ À venir  |
+| Études préliminaires           | 16 septembre  | 2 octobre     | Diagnostic des données, prototype, rapport au CERIU | ✅ Terminé  |
+| Première mise en commun        | 2 octobre     | 2 octobre     | Présentation                        | ✅ Terminé  |
+| Réalisation                    | 5 octobre     | À préciser    | Contexte municipal complet, base de données PostgreSQL | 🔄 En cours |
 | Présentation + Rapport         | 7 décembre    | 14 décembre   | Présentation + Rapport              | ⏳ À venir  |

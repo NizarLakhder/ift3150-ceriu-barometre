@@ -17,7 +17,7 @@ difficultés rencontrées, semaine après semaine.
 
 ---
 
-## Semaines 1 et 2 (4 au 15 septembre) — Ouverture et premier contact avec les données
+## Semaines 1 et 2 (4 au 15 septembre) : ouverture et premier contact avec les données
 
 ### Objectifs de la période
 - Comprendre le mandat du CERIU et le contexte des démarches municipales de gestion d'actifs
@@ -52,7 +52,7 @@ difficultés rencontrées, semaine après semaine.
 
 ---
 
-## Semaine 3 (16 au 22 septembre) — Diagnostic complet et premier prototype d'analyse
+## Semaine 3 (16 au 22 septembre) : diagnostic complet et premier prototype d'analyse
 
 ### Rencontre du 16 septembre avec le superviseur
 
@@ -99,7 +99,7 @@ Trois orientations fixées pour la suite :
 
 ---
 
-## Semaine 4 (23 au 29 septembre) — Contexte municipal et fichier mensuel
+## Semaine 4 (23 au 29 septembre) : contexte municipal et fichier mensuel
 
 ### Rencontre du 23 septembre avec le superviseur
 
@@ -152,7 +152,7 @@ Trois orientations fixées pour la suite :
 
 ---
 
-## Semaine 5 (30 septembre au 2 octobre) — Première mise en commun
+## Semaine 5 (30 septembre au 2 octobre) : première mise en commun
 
 ### Objectifs de la période
 - Présenter le projet, la solution envisagée et l'état d'avancement lors de la mise en commun
@@ -181,16 +181,28 @@ Trois orientations fixées pour la suite :
 
 ---
 
-## Semaine 6 (5 au 11 octobre) — Corrections
+## Semaine 6 (5 au 11 octobre) : corrections et nouvelles demandes
 
 ### Objectifs de la période
 - Corriger les défauts présentés à la mise en commun avant d'ajouter de nouvelles fonctions
 - Vérifier chaque correction en comparant les résultats avant et après
 
+### Rencontre du 7 octobre avec le superviseur
+
+Trois demandes pour la suite :
+
+- **Compléter le contexte qui manque**, en cherchant d'autres sources, et rendre le rapprochement des
+  noms tolérant : aux accents, aux déterminants, aux cédilles, et aux fautes de frappe selon la
+  longueur du mot, comme « batimnet » pour « batiment »;
+- **Faire lire les fiches par un modèle de langage simple**, plutôt qu'à la main;
+- **Ranger les données dans une base bien structurée**, avec des tables séparées plutôt que tout
+  dans le même panier.
+
+
 ### Travail réalisé
 
 !!! abstract "Avancement"
-    - [x] Contexte des organismes d'août : le programme d'analyse ajoute maintenant au fichier de
+    - [x] Contexte des organismes d'août : `analyser_seao.py` ajoute maintenant au fichier de
           contexte les organismes qu'un nouvel export fait apparaître (367 pour août)
         - Organismes d'août avec population : de 246 à 572 sur 665
     - [x] Homonymes : 23 départagés, 10 par le code postal publié dans le SEAO et 13 par la
@@ -202,6 +214,16 @@ Trois orientations fixées pour la suite :
           contre 3 avec la seule recherche de l'acronyme
     - [x] Tests : de 23 à 41, dont 13 pour `completer_contexte.py`, qui n'en avait aucun
     - [x] Pour chaque correction, sorties comparées avant et après : seules les valeurs visées changent
+    - [x] Essai d'un petit modèle de langage, qwen2.5 à 3 milliards de paramètres, installé
+          localement avec Ollama pour lire les fiches du SEAO
+        - Le fichier entier est refusé, trop gros. Avec le réglage par défaut, un message de cinq
+          fiches est coupé de plus de la moitié, sans avertissement
+        - Sur une analyse ouverte de cinq fiches, il ne reconnaît aucun des trois dossiers PGA-Eau
+        - Sur une question précise posée fiche par fiche, il répond juste : 14 champs sur 14, y
+          compris pour un dossier PGA-Eau sans acronyme et pour un piège
+        - Sur une fiche longue de 15 attributions, il n'en compte que 12
+    - [x] Essai à blanc du rapprochement tolérant, sans rien modifier : 17 municipalités et MRC
+          retrouvées parmi les cas restants, et 11 régies reconnues
 
 ### Décisions et ajustements
 
@@ -212,6 +234,11 @@ Trois orientations fixées pour la suite :
       et la façon dont chaque cas a été tranché est écrite dans le fichier de contexte.
     - Quand les identifiants d'un organisme ne concordent qu'en partie, le nom doit aussi être
       identique : un identifiant commun ne suffit plus.
+    - L'essai du modèle de langage est mis de côté pour l'instant. Un modèle simple sait extraire
+      des champs précis d'une fiche, mais pas analyser un ensemble de fiches. On y reviendra en fin
+      de session, sur davantage de fiches.
+    - La base sera PostgreSQL plutôt que SQLite : les montants y restent exacts au cent près, les
+      dates sont de vraies dates, et la recherche sans accents ou par noms proches y est intégrée.
 
 ### Difficultés rencontrées
 
@@ -220,10 +247,99 @@ Trois orientations fixées pour la suite :
       et Saint-Isidore. Se fier à ce mot aurait donné la mauvaise municipalité.
     - Le fichier des organismes périmunicipaux du ministère liste deux fois la Société de transport
       de l'Outaouais, ce qui la faisait passer pour un homonyme.
+    - Le modèle de langage ne signale jamais qu'il n'a lu qu'une partie du message. Sans un coup
+      d'œil au journal d'Ollama, l'erreur serait passée inaperçue.
 
 ### Prochaines étapes
 
-- Construire une base de données SQLite pour cumuler les périodes sans double compte
-- Tester un agent d'intelligence artificielle sur la lecture des fichiers du SEAO et des
-  procès-verbaux, en mesurant ses réponses sur des cas vérifiés
-- Valider la règle PGA-Eau sur d'autres périodes
+- Intégrer le rapprochement tolérant au programme, puis régler les cas qui restent
+- Construire la base PostgreSQL pour cumuler les périodes sans double compte
+
+---
+
+## Semaine 7 (12 au 18 octobre) : contexte complété et base de données
+
+### Objectifs de la période
+- Intégrer le rapprochement tolérant des noms et régler les derniers cas du contexte
+- Construire la base de données et vérifier qu'elle redonne les chiffres du programme
+
+### Travail réalisé
+
+!!! abstract "Avancement"
+    - [x] Rapprochement tolérant intégré à `completer_contexte.py`. Il ne sert que si le nom exact
+          ne trouve rien, et rattrape les abréviations (« Ste », « M. »), les déterminants oubliés,
+          les précisions entre parenthèses, les désignations placées à la fin du nom et les fautes
+          de frappe
+        - 17 municipalités et MRC rattachées, et 11 régies reconnues, dont « Rougement » pour
+          Rougemont
+        - Sur 36 907 fautes introduites exprès dans les noms officiels, 83 % sont retrouvées, et
+          aucune ne mène à une mauvaise municipalité
+        - Les 7 que le code postal ne confirmait pas ont été vérifiés à la main sur la page de leur
+          avis dans le SEAO : la région y est chaque fois celle du répertoire, et l'adresse ou le
+          domaine du courriel aussi, sauf pour un contrat de gré à gré sans adresse
+    - [x] Les derniers cas réglés à la main, chacun avec une source publique notée dans le fichier
+          de contexte
+        - 9 organismes rattachés grâce aux avis republiés sur AchatsCanada, qui donnent l'adresse de
+          l'acheteur, et aux annonces officielles de regroupement
+        - Les 75 organismes restants ne sont pas des municipalités : régies, sociétés de transport,
+          offices d'habitation
+        - Il ne reste aucun cas à trancher
+    - [x] Trois défauts des fichiers sources corrigés
+        - La Communauté métropolitaine de Montréal avait reçu la population de la Ville : 1,9 million
+          d'habitants au lieu de 4,3
+        - Les noms des régies étaient coupés à 60 caractères
+        - Les codes de l'est du Québec avaient perdu leur zéro dans les fichiers sur l'eau : 28
+          organismes n'avaient que leur indice de fuites
+    - [x] Des étiquettes qui disent la vérité dans le fichier de contexte : « Sans objet », « Hors
+          MRC » et « Aucune donnée » remplacent « À compléter » là où rien ne manque vraiment
+    - [x] Base PostgreSQL construite et chargée avec `charger_base.py` : quatre groupes, 19 tables
+          et 3 vues
+        - 9 037 fiches, avec exactement les mêmes nombres de fiches, montants et dossiers PGA-Eau
+          que les tableaux produits par `analyser_seao.py`
+        - Un second chargement n'ajoute rien, et un contrat présent dans deux exports n'est compté
+          qu'une fois
+    - [x] `analyser_seao.py` allégé : ses petites fonctions utilitaires, comme le nettoyage d'un
+          texte ou la lecture d'une date, sont rangées dans `utilitaires.py`. Les résultats sont
+          restés identiques, octet pour octet
+    - [x] Organismes avec population : de 614 à 640 sur 715
+    - [x] Tests : de 41 à 96
+
+### Décisions et ajustements
+
+!!! info "Décisions"
+    - Une ressemblance ne suffit pas. Un nom seulement approché n'est retenu que si un indice publié
+      le confirme : le code postal, la désignation ou la région.
+    - Un organisme dont la municipalité a été regroupée est rattaché à la nouvelle municipalité,
+      avec sa population actuelle. Le fichier `regroupements.csv` garde l'ancien code et la source
+      officielle de chaque regroupement. Cette convention reste à valider.
+    - Un territoire non organisé est écarté quand une municipalité porte le même nom : il ne passe
+      pas de contrats lui-même.
+    - Dans la base, les clés viennent des données : code géographique, numéro de dossier,
+      identifiants du SEAO. Seul l'organisme reçoit un numéro interne, puisque rien ne l'identifie
+      officiellement.
+
+### Difficultés rencontrées
+
+!!! warning "Difficultés"
+    - Pour les cas ambigus, les fiches du SEAO ne donnent pas l'adresse de l'acheteur. Les mêmes
+      avis, republiés sur AchatsCanada, la donnent : c'est ce qui a permis de les trancher.
+    - Trois des municipalités recherchées n'existent plus sous leur nom : elles ont été regroupées
+      en 2025 et en 2026. Leurs données sur l'eau de 2024 portent encore leurs anciens codes.
+    - Le fichier de contexte ne connaît pas tous les identifiants d'acheteur de Montréal, qui en a
+      37 : la base les rattache par le nom, comme le fait déjà `analyser_seao.py`.
+
+### Prochaines étapes
+
+<div class="a-confirmer" markdown>
+
+*À confirmer de ce qui sera livré la semaine prochaine:*
+
+- Valider la règle PGA-Eau sur d'autres périodes du SEAO.
+- Ajouter au modèle de données les démarches elles-mêmes (plan, date, lien, source), pour préparer
+  le prototype d'interface du baromètre
+- Ajouter le type de milieu, à partir de la classification de Statistique Canada par zones
+  d'influence métropolitaine
+- Décider quoi faire des 75 organismes non municipaux : les laisser sans population, ou les
+  rattacher au territoire qu'ils desservent
+- Faire une première comparaison ajustée à la population à partir de la base
+</div>

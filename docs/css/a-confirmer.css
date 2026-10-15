@@ -1,0 +1,5 @@
+/* Ce qui reste à confirmer avec le superviseur s'affiche en gris, */
+/* comme les prochaines étapes de la semaine 7 du suivi.             */
+.md-typeset .a-confirmer {
+  color: var(--md-default-fg-color--light);
+}

@@ -1,4 +1,4 @@
-# Baromètre CERIU — Projet IFT3150
+# Baromètre CERIU (projet IFT3150)
 
 Projet IFT3150, Université de Montréal, automne 2026.
 Étudiant : Nizar Lakhder. Superviseur : Louis-Édouard Lafontant.
@@ -14,10 +14,12 @@ Site de suivi : <https://nizarlakhder.github.io/ift3150-ceriu-barometre/>
 Ce document résume ce qui a été fait à ce jour, ce que les données montrent, les questions qui
 restent ouvertes, puis la façon de relancer le travail.
 
-**État au 6 octobre 2026.** Deux exports du SEAO ont été analysés : la semaine du 7 au
+**État au 14 octobre 2026.** Deux exports du SEAO ont été analysés : la semaine du 7 au
 13 septembre 2026, qui sert de référence, et le mois d'août 2026. Depuis la première mise en commun
-du 2 octobre, le contexte des organismes d'août a été créé, les homonymes ont été départagés et une
-règle propre au PGA-Eau a été intégrée au programme.
+du 2 octobre, trois chantiers ont avancé. Le contexte municipal est maintenant complet pour toutes
+les municipalités et MRC rencontrées. Un petit modèle de langage a été mis à l'essai pour lire les
+fiches à notre place. Enfin, les données sont rangées dans une base PostgreSQL, qui permet de
+cumuler plusieurs exports sans compter deux fois le même dossier.
 
 ## En bref
 
@@ -29,13 +31,17 @@ règle propre au PGA-Eau a été intégrée au programme.
   l'eau » les trouve tous, mais parmi 749 fiches. La semaine de septembre en ajoute un cinquième, à
   Matagami.
 - **Peu de petits contrats sont publiés.** Seulement 8,5 % des contrats d'achat chiffrés de la
-  semaine, et 7,9 % de ceux d'août, sont sous 25 000 $. Il y en a plus de trois fois plus juste
+  semaine, et 7,9 % de ceux d'août, sont sous 25 000 \$. Il y en a plus de trois fois plus juste
   au-dessus du seuil que juste en dessous : un petit mandat peut passer inaperçu.
-- **Le contexte municipal est rattaché automatiquement** : population, superficie, région et MRC
-  pour 295 des 346 organismes de la semaine et 572 des 665 organismes d'août, avec l'état du réseau
-  d'eau pour une partie d'entre eux.
-- **Tout est reproductible** : deux programmes Python sans dépendance externe, 41 tests, et les mêmes
-  fichiers donnent toujours les mêmes chiffres.
+- **Le contexte municipal se rattache même quand le SEAO écrit mal un nom.** « St » pour Saint, un
+  « de » oublié, une faute de frappe comme « Rougement » pour Rougemont : le programme les rattrape,
+  mais il n'accepte un nom seulement approché que si un indice publié le confirme. 640 des 715
+  organismes rencontrés ont maintenant leur population ; les 75 autres ne sont pas des municipalités.
+- **Une base de données cumule les exports sans double compte.** Un même dossier peut revenir d'un
+  export à l'autre, avec un montant différent : la base garde chaque version, mais ne compte que la
+  dernière.
+- **Tout est reproductible** : trois programmes Python, 96 tests, et les mêmes fichiers donnent
+  toujours les mêmes chiffres.
 
 ## Ce qui a été fait
 
@@ -47,10 +53,18 @@ règle propre au PGA-Eau a été intégrée au programme.
    de chaque organisme et une liste de points à relire. Chaque ligne renvoie à son avis public.
 3. **Ajouter le contexte municipal.** `completer_contexte.py` rattache chaque organisme au Répertoire
    des municipalités et aux données de la Stratégie québécoise d'économie d'eau potable, deux jeux du
-   ministère des Affaires municipales et de l'Habitation.
+   ministère des Affaires municipales et de l'Habitation. Il tolère les écarts d'écriture du SEAO.
+   Les quelques cas qu'aucun indice ne permettait de trancher ont été réglés à la main, chacun avec
+   sa source publique.
 4. **Repérer les démarches PGA-Eau.** Le programme marque les fiches liées à l'eau au sens large
    (colonne `lie_eau`) et, avec une règle plus précise, les dossiers PGA-Eau (colonne `pga_eau`).
 5. **Documenter la qualité des données**, pour savoir ce qu'il faut relire avant de compter.
+6. **Cumuler les exports dans une base PostgreSQL.** `charger_base.py` range les fiches, le
+   répertoire et le contexte dans une base de 19 tables, puis vérifie qu'elle redonne exactement les
+   chiffres que donne `analyser_seao.py`.
+7. **Mettre un modèle de langage à l'essai.** Un petit modèle, qwen2.5, a été installé avec Ollama
+   sur un ordinateur personnel pour lire les fiches à la place d'une lecture à la main. Les
+   difficultés et les résultats sont décrits plus bas.
 
 | | Semaine du 7 au 13 sept. 2026 | Mois d'août 2026 |
 |---|---:|---:|
@@ -60,8 +74,10 @@ règle propre au PGA-Eau a été intégrée au programme.
 | Contrats présents | 1 084 | 6 577 |
 | Fiches liées à l'eau (filet large) | 178 | 749 |
 
-**476 dossiers apparaissent dans les deux exports.** Additionner les deux colonnes compterait ces
-dossiers deux fois : pour cumuler plusieurs périodes, il faudra retirer les doublons.
+**476 dossiers apparaissent dans les deux exports.** Additionner les deux colonnes les compterait
+deux fois. La base de données règle ce problème : une fiche n'y entre qu'une fois, et la vue
+`contrat_courant` ne garde que la dernière version de chaque contrat. Seize contrats figurent dans
+les deux exports ; l'un d'eux passe de 42 669,55 \$ en août à 16 121,55 \$ en septembre.
 
 ## Ce que les données montrent
 
@@ -106,10 +122,12 @@ Le programme applique maintenant une règle entre les deux (colonne `pga_eau`) :
 suivi du mot « eau », quelle que soit la ponctuation, ou les mots « gestion », « actif » et « eau »
 dans le même titre. Sur les 9 037 fiches municipales des deux exports, elle retrouve les cinq
 dossiers lus à la main, Matagami compris, et aucun autre. Cinq cas restent trop peu pour conclure :
-la règle est à valider sur d'autres périodes.
+la règle est à valider sur d'autres périodes. Surtout, ces cinq dossiers ont eux-mêmes été repérés
+par leur titre. La règle ne dit donc rien des mandats de gestion d'actifs dont le titre ne mentionne
+ni PGA ni gestion d'actifs, et qui pourraient être nombreux : c'est la prochaine chose à mesurer.
 
-**Sur les prix.** Les montants vont de 4 892 $ (Matagami, un « renforcement stratégique » confié à
-l'UMQ, semaine de septembre) à 77 062 $ (Nicolet, un « accompagnement à la préparation » du plan).
+**Sur les prix.** Les montants vont de 4 892 \$ (Matagami, un « renforcement stratégique » confié à
+l'UMQ, semaine de septembre) à 77 062 \$ (Nicolet, un « accompagnement à la préparation » du plan).
 Ces mandats ne sont pas forcément de même nature : c'est l'objet de la première question plus bas.
 
 ### Ce qu'un contrat prouve, et ce qu'il ne prouve pas
@@ -134,15 +152,15 @@ Sur les 1 000 contrats d'achat chiffrés de l'export de la semaine, chaque contr
 | De 25 000 à 50 000 $ | 244 | 24,4 % |
 | 50 000 $ et plus | 671 | 67,1 % |
 
-On compte 18 contrats entre 20 000 et 25 000 $, contre 58 entre 25 000 et 30 000 $. Ce saut juste
+On compte 18 contrats entre 20 000 et 25 000 \$, contre 58 entre 25 000 et 30 000 \$. Ce saut juste
 au-dessus du seuil est très probablement l'effet de l'obligation de publication. Conséquence directe :
-une petite municipalité qui paie son plan moins de 25 000 $ risque de ne laisser aucune trace.
-Matagami montre que ce n'est pas systématique, puisque son contrat de 4 892 $ est publié.
+une petite municipalité qui paie son plan moins de 25 000 \$ risque de ne laisser aucune trace.
+Matagami montre que ce n'est pas systématique, puisque son contrat de 4 892 \$ est publié.
 
 Le mois d'août, compté de la même façon, donne le même portrait : sur 6 305 contrats d'achat
-chiffrés, 497 sont sous 25 000 $ (7,9 %), 1 802 entre 25 000 et 50 000 $ (28,6 %) et 4 006 à
-50 000 $ ou plus (63,5 %). On y compte 130 contrats entre 20 000 et 25 000 $, contre 470 entre
-25 000 et 30 000 $.
+chiffrés, 497 sont sous 25 000 \$ (7,9%), 1 802 entre 25 000 et 50 000 \$ (28,6 %) et 4 006 à
+50 000 \$ ou plus (63,5 %). On y compte 130 contrats entre 20 000 et 25 000 \$, contre 470 entre
+25 000 et 30 000 \$.
 
 ### Le contexte municipal
 
@@ -151,31 +169,13 @@ des municipalités se fait par le nom, puisque le SEAO ne porte aucun code géog
 
 | | Semaine (346 organismes) | Août (665 organismes) |
 |---|---:|---:|
-| Population, superficie et région | 295 | 572 |
-| MRC | 236 | 478 |
-| Données sur le réseau d'eau | 192 | 357 |
+| Population, superficie et région | 305 | 593 |
+| MRC | 245 | 498 |
+| Données sur le réseau d'eau | 199 | 368 |
 
-Quand un nom correspond à plusieurs municipalités du répertoire, le programme ne tranche qu'avec un
-indice publié : le code postal donné par le SEAO, comparé à celui de l'hôtel de ville, ou une
-désignation distinctive écrite au début du nom (Canton, Village, Ville, Paroisse). Le mot
-« Municipalité » ne compte pas : le SEAO l'emploie aussi pour des paroisses, comme Sainte-Françoise.
-23 homonymes ont été départagés ainsi, 10 par le code postal et 13 par la désignation, et la façon
-dont chacun a été tranché est écrite dans le fichier de contexte. Sans indice, le programme refuse
-de choisir.
-
-Les 51 organismes de la semaine encore sans population se répartissent ainsi :
-
-- **34** ne portent aucun nom du répertoire. Ce sont surtout des régies, des offices d'habitation et
-  des sociétés paramunicipales, comme la Société du Parc Jean-Drapeau, mais aussi des municipalités
-  dont le nom s'écrit autrement dans le SEAO, comme « Saint-Donat-de-Rimouski ».
-- **15** sont des organismes périmunicipaux reconnus, mais le répertoire ne donne pour eux ni
-  population ni superficie.
-- **2** restent ambigus faute d'adresse publiée : Saint-Donat et Saint-Elzéar, qui existent chacune
-  en deux exemplaires au Québec.
-
-Le fichier de contexte compte 715 lignes : les organismes des deux exports, dont Nicolet et Windsor,
-saisies à la main pour suivre leurs dossiers PGA-Eau. Chaque nouvel export y ajoute les organismes
-qu'il fait apparaître, sans jamais modifier une ligne existante.
+Les écarts entre ces lignes ont tous une explication. Dans la semaine, 31 villes ne font partie
+d'aucune MRC, comme Montréal, Laval ou Longueuil, et pour 74 municipalités la Stratégie publie
+elle-même « Aucune donnée » sur l'eau.
 
 Pour Matagami, on obtient ainsi : 1 352 habitants, 1 278 personnes desservies par le réseau, un
 indice de fuites de 3,14 et une validité des audits de l'eau de 58 %.
@@ -183,6 +183,99 @@ indice de fuites de 3,14 et une validité des audits de l'eau de 58 %.
 Ce dernier indicateur mérite l'attention. Il ne mesure pas l'état du réseau,
 mais la qualité des données qu'une municipalité tient sur son eau : c'est presque une mesure de
 maturité en gestion d'actifs.
+
+**Comment un nom est rattaché.** Le programme essaie trois choses, dans l'ordre : le code
+géographique déjà inscrit dans le contexte, le nom exact, puis des règles tolérantes. Celles-ci
+rattrapent ce que le SEAO écrit autrement : une abréviation (« Ste-Gertrude-Manneville »), un
+déterminant oublié (« Saint-Léon-Standon » pour Saint-Léon-de-Standon), une précision entre
+parenthèses (« Saint-Léon-le-Grand (Mauricie) »), une désignation placée à la fin
+(« Marston-Canton ») ou une faute de frappe. La tolérance dépend de la longueur du mot : aucune
+faute jusqu'à quatre lettres, une de cinq à huit, deux au-delà. C'est voulu, puisqu'une seule lettre
+sépare Saint-Paul de Sainte-Paule.
+
+Une ressemblance ne suffit jamais. Un nom seulement approché n'est retenu que si un indice publié le
+confirme : le code postal, la désignation ou la région. Pour vérifier cette prudence, 36 907 fautes
+ont été introduites exprès dans les noms officiels : 83 % sont retrouvées, et aucune ne mène à une
+mauvaise municipalité. Les sept rattachements que le code postal ne confirmait pas ont aussi été
+vérifiés à la main, sur la page de leur avis dans le SEAO : la région y est chaque fois celle du
+répertoire, et l'adresse ou le domaine du courriel aussi, sauf pour un contrat de gré à gré dont la
+page ne donne pas d'adresse.
+
+**Quand un nom correspond à plusieurs municipalités**, le programme ne tranche qu'avec un indice
+publié : le code postal donné par le SEAO, comparé à celui de l'hôtel de ville, ou une désignation
+distinctive écrite dans le nom (Canton, Village, Ville, Paroisse). Le mot « Municipalité » ne compte
+pas : le SEAO l'emploie aussi pour des paroisses, comme Sainte-Françoise. 23 homonymes ont été
+départagés ainsi. Sans indice, le programme refuse de choisir.
+
+**Neuf cas ont été réglés à la main**, chacun avec sa source publique, notée dans le fichier de
+contexte. Pour ces cas, les fiches du SEAO ne donnent pas l'adresse de l'acheteur. On la trouve en
+revanche sur le site fédéral AchatsCanada, qui republie les avis du SEAO : c'est ainsi que
+« Municipalité de Saint-Donat » a été rattachée à la municipalité de Lanaudière plutôt qu'à celle du
+Bas-Saint-Laurent.
+Trois des organismes cherchés n'existent plus sous leur nom : Saint-Bruno, Sainte-Anne-de-la-Pocatière
+et Saint-Onésime-d'Ixworth ont été regroupées en 2025 et en 2026 avec des voisines. Elles sont
+rattachées à la nouvelle municipalité, et le fichier `regroupements.csv` garde la trace de chaque
+regroupement, avec sa source officielle.
+
+**Il ne reste aucun cas à trancher.** Les 41 organismes de la semaine encore sans population ne sont
+pas des municipalités. Le répertoire en connaît 23, des régies et des sociétés de transport, mais
+sans leur donner de population. Les 18 autres n'y figurent pas, comme les offices d'habitation ou la
+Société du Parc Jean-Drapeau.
+
+**Ce que disent les cases sans chiffre.** Le fichier `contexte_municipalites.csv` compte 715 lignes,
+une par organisme rencontré dans les deux exports. Chaque nouvel export y ajoute ceux qu'il fait
+apparaître, sans jamais modifier une ligne existante. Une case sans chiffre y dit pourquoi :
+
+| Mot | Sens |
+|---|---|
+| `À compléter` | la donnée peut exister, mais on ne l'a pas encore trouvée |
+| `Sans objet` | le champ ne s'applique pas, comme la MRC dont ferait partie une MRC |
+| `Hors MRC` | la ville ne fait partie d'aucune MRC, d'après le répertoire |
+| `Aucune donnée` | la Stratégie publie la municipalité, mais sans aucune valeur |
+
+Une note vide veut simplement dire qu'il n'y a rien à signaler. Deux colonnes restent à compléter
+pour tout le monde, faute de source : la proximité d'un fleuve, d'un lac ou d'une rivière, et le type
+de milieu.
+
+**Trois défauts des fichiers sources ont été trouvés en chemin, et contournés.**
+
+- Le répertoire écrit « Comm. métropolitaine de Montréal ». Faute de reconnaître l'abréviation, la
+  communauté avait reçu la population de la Ville de Montréal : 1,9 million d'habitants au lieu
+  de 4,3.
+- Le fichier des organismes périmunicipaux coupe les noms à 60 caractères, et met la suite dans un
+  second champ : 132 organismes sur 338 sont touchés.
+- Deux des trois fichiers de la Stratégie perdent le zéro du début des codes de l'est du Québec :
+  « 3005 » pour Gaspé, au lieu de « 03005 ». 28 organismes n'avaient que leur indice de fuites.
+
+### Un modèle de langage pour lire les fiches
+
+Lire des milliers de fiches à la main prend du temps. Un petit modèle de langage, qwen2.5 à
+3 milliards de paramètres, a donc été installé avec Ollama sur un ordinateur personnel, pour lire les
+fiches du SEAO.
+
+**Les difficultés rencontrées :**
+
+- **Il ne lit pas un export entier.** Le fichier de la semaine pèse 16 Mo, et il est refusé : il faut
+  lui donner les fiches une à une.
+- **Il coupe sans prévenir.** Avec le réglage par défaut, un message de cinq fiches a été tronqué de
+  plus de la moitié, et le modèle a répondu comme s'il avait tout lu. Il a fallu agrandir sa fenêtre
+  de lecture, et vérifier dans le journal d'Ollama ce qu'il avait vraiment reçu.
+- **Les fiches longues lui posent problème.** Sur une fiche de 15 attributions, il en a compté 12.
+
+**Les résultats :**
+
+- **Sur une question précise, il répond juste.** Avec une seule fiche et une liste de champs à
+  remplir, il donne les 14 champs correctement, y compris pour le dossier de Mont-Tremblant, qui
+  n'emploie pas l'acronyme PGA-Eau, et pour un piège, un plan de gestion des actifs des bâtiments,
+  qu'il ne prend pas pour un PGA-Eau. Sur sept fiches courtes, il donne les mêmes nombres
+  d'attributions et de contrats, les mêmes statuts et les mêmes montants que le programme.
+- **Sur une analyse ouverte, il échoue.** Invité à analyser cinq fiches à la fois, dont trois dossiers
+  PGA-Eau, il n'en reconnaît aucun, et il prête à une fiche des renseignements qui viennent d'une
+  autre.
+
+Un petit modèle peut donc extraire des champs précis, fiche par fiche, mais pas analyser un ensemble
+de fiches, et il ne remplace pas la lecture complète que fait le programme. L'essai est mis de côté
+pour l'instant, et sera repris sur davantage de fiches.
 
 ### La qualité des données
 
@@ -201,7 +294,8 @@ décrivent simplement la façon dont la source est construite.
 
 ### Ce qu'on sait maintenant de la structure du SEAO
 
-- Une fiche est l'état d'un dossier au moment de l'export, pas un nouveau contrat.
+- Une fiche est l'état d'un dossier au moment de l'export, pas un nouveau contrat. Un même dossier
+  revient d'un export à l'autre, et son montant peut changer entre-temps.
 - La date d'une fiche (`release.date`) est presque toujours la date d'ouverture de l'avis : c'est le
   cas pour 1 518 des 1 561 fiches municipales. La date de publication semble plutôt inscrite dans
   l'identifiant de la fiche.
@@ -213,30 +307,64 @@ décrivent simplement la façon dont la source est construite.
 - Le marqueur « municipal » du SEAO est large : il comprend aussi les MRC, régies, sociétés de
   transport et offices d'habitation.
 - La Ville de Montréal publie sous un identifiant par arrondissement ou service : 31 identifiants et
-  218 fiches dans l'export.
+  218 fiches dans l'export de la semaine, 37 identifiants en comptant le mois d'août.
+- Dans les deux exports, chaque attribution a exactement un fournisseur, et chaque contrat découle
+  d'une seule attribution. En revanche, 361 soumissionnaires ne figurent pas dans la liste des
+  parties de leur fiche.
+
+## La base de données
+
+La base range les données en quatre groupes, chacun dans son propre schéma PostgreSQL :
+
+| Groupe | Ce qu'il contient |
+|---|---|
+| `territoire` | ce que dit le ministère : régions, MRC, municipalités, regroupements, données sur l'eau |
+| `organismes` | qui achète : l'organisme réel et ses identifiants d'acheteur dans le SEAO |
+| `seao` | les fiches publiées, découpées en tables : fiche, attribution, contrat, fournisseur… |
+| `analyses` | ce que le programme en déduit, et les vues qui servent à l'interroger |
+
+Les clés viennent des données elles-mêmes : le code géographique d'une municipalité, le numéro de
+dossier (`ocid`), les identifiants `OP` et `FO` du SEAO. Chaque fiche est aussi conservée telle
+qu'elle a été publiée, pour toujours pouvoir revenir à la source.
+
+Trois vérifications sont faites à chaque chargement :
+
+- **un export n'entre qu'une fois** : son empreinte est notée, et un fichier modifié qui porte le nom
+  d'un export déjà chargé est refusé ;
+- **la base redonne les chiffres du programme** : 1 561 et 7 476 fiches, 609 861 803,11 \$ et
+  5 219 780 511,76 \$ de montants attribués, les cinq dossiers PGA-Eau ;
+- **un contrat n'est compté qu'une fois** : la vue `analyses.contrat_courant` garde sa dernière
+  version.
+
+Les montants y sont exacts au cent près, les dates sont de vraies dates, et les titres se cherchent
+sans tenir compte des accents.
 
 ## Questions ouvertes
 
 1. **Qu'est-ce qui compte comme trace de démarche?** Un accompagnement à 4 892 $, comme celui de
    Matagami, vaut-il un mandat d'élaboration du plan? La réponse change ce que le baromètre
    affichera.
-2. **Quelles unités comparer?** Les régies, sociétés de transport et offices d'habitation n'ont ni
-   population ni territoire propre. Faut-il les comparer entre eux, ou les exclure des comparaisons
+2. **Quelles unités comparer?** Les 75 organismes non municipaux, comme les régies, les sociétés de
+   transport et les offices d'habitation, n'ont ni population ni territoire propre. Faut-il les
+   comparer entre eux, les rattacher au territoire qu'ils desservent, ou les exclure des comparaisons
    ajustées?
-3. **Comment mesurer ce que la méthode rate?** Une liste de référence, même partielle, de
+3. **Que faire des municipalités regroupées?** Un contrat signé par Saint-Bruno avant son
+   regroupement est rattaché à la nouvelle municipalité d'Hébertville, avec sa population actuelle.
+   C'est la convention retenue pour l'instant, mais elle reste à valider.
+4. **Comment mesurer ce que la méthode rate?** Une liste de référence, même partielle, de
    municipalités dont on sait qu'elles ont engagé une démarche permettrait de le mesurer, plutôt que
    de l'estimer.
 
 ## Prochaines étapes
 
-1. Cumuler plusieurs périodes dans une petite base de données SQLite, sans compter deux fois les
-   mêmes dossiers : 476 dossiers apparaissent dans les deux exports.
-2. Tester un agent d'intelligence artificielle pour lire ce que le programme lit mal : les titres et
-   les fiches du SEAO, puis les procès-verbaux en PDF. Ses réponses seront mesurées sur des cas déjà
-   vérifiés à la main, comme les cinq dossiers PGA-Eau et les pièges connus.
-3. Valider la règle PGA-Eau sur d'autres périodes.
-4. Faire une première comparaison ajustée à la population sur un petit groupe de municipalités
-   comparables.
+1. Ajouter le type de milieu, à partir de la classification de Statistique Canada par zones
+   d'influence métropolitaine, publiée par subdivision de recensement, dont le code est celui du
+   répertoire précédé de 24.
+2. Faire une première comparaison ajustée à la population, sur un petit groupe de municipalités
+   comparables, à partir de la base.
+3. Valider la règle PGA-Eau sur d'autres périodes : la base permet maintenant d'en charger plusieurs.
+4. Reprendre l'essai du modèle de langage sur davantage de fiches, surtout les plus longues, avec des
+   questions précises plutôt qu'une analyse ouverte.
 5. Documenter une démarche de bout en bout pour une municipalité, en cherchant dans d'autres sources
    publiques la résolution du conseil et la publication du plan.
 
@@ -245,10 +373,17 @@ décrivent simplement la façon dont la source est construite.
 | Emplacement | Contenu |
 |---|---|
 | `analyser_seao.py` | programme principal : lit un export du SEAO et produit quatre tableaux |
-| `completer_contexte.py` | complète le contexte municipal à partir des fichiers du MAMH |
-| `test_analyser_seao.py` | 28 tests de l'analyse, sur de petits cas construits, sans lire le vrai export |
-| `test_completer_contexte.py` | 13 tests du contexte, inspirés de vrais homonymes |
+| `completer_contexte.py` | complète le contexte municipal à partir des fichiers du ministère, en tolérant les écarts d'écriture du SEAO |
+| `charger_base.py` | range les exports, le répertoire et le contexte dans PostgreSQL, puis vérifie le résultat |
+| `utilitaires.py` | les petites fonctions partagées : nettoyer un texte, lire une date, convertir un montant, écrire un CSV |
+| `schema.sql` | la structure de la base, en quatre groupes de tables |
 | `contexte_municipalites.csv` | le contexte de chaque organisme : les programmes y ajoutent des lignes et remplissent les cases « À compléter », mais **n'écrasent jamais une valeur** |
+| `regroupements.csv` | les municipalités regroupées depuis 2025, avec leurs sources officielles |
+| `test_analyser_seao.py` | 28 tests de l'analyse, sur de petits cas construits, sans lire le vrai export |
+| `test_completer_contexte.py` | 49 tests du contexte, inspirés de vrais homonymes et de vraies fautes d'écriture |
+| `test_charger_base.py` | 11 tests de la conversion des fiches, sans base de données |
+| `test_utilitaires.py` | 8 tests des petites fonctions partagées |
+| `requirements.txt` | les bibliothèques à installer |
 | `docs/` | les pages du site de suivi |
 | `zensical.toml` | la configuration du site |
 | `.github/workflows/docs.yml` | la publication automatique du site |
@@ -259,8 +394,15 @@ régénèrent.
 
 ## Lancer l'analyse
 
-Il faut Python 3.10 ou plus récent. Les programmes n'utilisent que la bibliothèque standard, il n'y
-a rien à installer.
+Il faut Python 3.10 ou plus récent. Les programmes s'appuient sur deux bibliothèques : `rapidfuzz`,
+qui mesure l'écart entre deux mots, et `psycopg`, qui écrit dans PostgreSQL. Une seule commande les
+installe, avec ce qu'il faut pour le site :
+
+```powershell
+pip install -r requirements.txt
+```
+
+Puis, dans l'ordre :
 
 ```powershell
 # Analyser l'export hebdomadaire de référence, déposé dans donnees_seao/.
@@ -272,7 +414,10 @@ python analyser_seao.py mensuel_20260801_20260831.json
 # Compléter le contexte municipal (après l'analyse : il y lit les codes postaux).
 python completer_contexte.py
 
-# Lancer les 41 tests des deux programmes.
+# Ranger le tout dans la base PostgreSQL (voir plus bas pour la préparer).
+python charger_base.py
+
+# Lancer les 96 tests.
 python -B -m unittest -v
 ```
 
@@ -281,15 +426,70 @@ tiennent compte.
 
 Les tableaux produits sont écrits dans `sorties/`. Tout ce qui s'y trouve est remplacé à chaque
 exécution : n'y saisissez rien. Le seul fichier à remplir à la main est `contexte_municipalites.csv`.
+Pour régler un cas à la main, il suffit d'y écrire le code géographique de l'organisme : le
+programme remplit le reste à la prochaine exécution.
+
+## Préparer la base de données
+
+Il faut PostgreSQL 13 ou plus récent ; le projet est testé avec la version 18. La préparation se
+fait une seule fois.
+
+**1. Créer un compte et une base réservés au projet**, en administrateur, par exemple avec `psql` ou
+l'outil de requête de pgAdmin :
+
+```sql
+CREATE ROLE barometre LOGIN PASSWORD 'un-mot-de-passe';
+CREATE DATABASE barometre OWNER barometre;
+```
+
+**2. Enregistrer ce mot de passe dans le fichier prévu par PostgreSQL**, hors du projet, pour qu'il
+ne se retrouve jamais dans le dépôt. Sous Windows, ce fichier est `%APPDATA%\postgresql\pgpass.conf`
+; ailleurs, c'est `~/.pgpass`. Il contient une ligne de cette forme :
+
+```text
+localhost:5433:barometre:barometre:un-mot-de-passe
+```
+
+**3. Charger.** `python charger_base.py` crée les tables qui manquent, charge ce qui n'est pas
+encore en base, puis compare le résultat aux tableaux d'`analyser_seao.py`. On peut le relancer sans
+crainte : un export déjà chargé est reconnu et laissé de côté. `python charger_base.py
+--reinitialiser` efface tout et recharge depuis les fichiers.
+
+Par défaut, le programme se connecte à `localhost`, port 5433, avec le compte et la base
+`barometre`. Les variables d'environnement `BAROMETRE_HOTE`, `BAROMETRE_PORT`, `BAROMETRE_BASE` et
+`BAROMETRE_COMPTE` permettent d'en changer.
+
+Deux exemples de questions qu'on peut lui poser :
+
+```sql
+-- Les dossiers PGA-Eau, avec la population de leur municipalité.
+SELECT organisme, territoire, population, titre
+FROM analyses.fiche_municipale
+WHERE pga_eau
+ORDER BY population;
+
+-- Les titres qui parlent d'un plan de gestion des actifs, avec ou sans accents.
+SELECT titre
+FROM seao.fiche
+WHERE titre_recherche @@ plainto_tsquery('analyses.fr_sans_accents', 'plan gestion actifs');
+```
 
 ## Obtenir les données
 
 Les exports du SEAO se téléchargent sur Données Québec, dans le jeu « Système électronique d'appel
-d'offres (SEAO) », et se déposent dans `donnees_seao/`.
+d'offres (SEAO) », et se déposent dans `donnees_seao/` :
+<https://www.donneesquebec.ca/recherche/dataset/systeme-electronique-dappel-doffres-seao>
 
-Le contexte municipal vient de deux jeux de données du ministère des Affaires municipales et de
-l'Habitation, sur Données Québec. Le programme ne télécharge rien : déposez vous-même ces fichiers
-dans `donnees_reference/`.
+La population, la superficie, la région, la MRC et l'état des réseaux d'eau viennent de deux jeux de
+données du ministère des Affaires municipales et de l'Habitation, sur Données Québec :
+
+- le Répertoire des municipalités du Québec, pour la population, la superficie, la région et la MRC :
+  <https://www.donneesquebec.ca/recherche/dataset/repertoire-des-municipalites-du-quebec>
+- la Stratégie québécoise d'économie d'eau potable 2019-2025, pour la population desservie, l'indice
+  de fuites, la validité des audits et la consommation :
+  <https://www.donneesquebec.ca/recherche/dataset/sqeep-2019-2025>
+
+Le programme ne télécharge rien : déposez vous-même ces fichiers dans `donnees_reference/`.
 
 | Jeu de données | Ressource à prendre | Fichier |
 |---|---|---|
@@ -301,7 +501,14 @@ dans `donnees_reference/`.
 | Stratégie québécoise d'économie d'eau potable 2019-2025 | consommation résidentielle 2024, par classe de population | `consommation_classe_2024.csv` |
 
 Les mêmes fichiers donnent toujours les mêmes résultats, et la date de chaque fichier utilisé est
-inscrite dans le contexte.
+inscrite dans le contexte. Le fichier `regroupements.csv`, lui, est tenu à la main : chaque ligne y
+cite l'annonce ou l'avis officiel du regroupement.
+
+Les neuf cas réglés à la main s'appuient sur d'autres sources publiques : les avis du SEAO
+republiés sur le site fédéral AchatsCanada, qui donnent l'adresse de l'acheteur, les annonces de
+regroupement du gouvernement du Québec et un avis du ministère de la Justice. Chacune est citée, avec
+son lien, dans la page [Références](docs/references.md) du site et dans la colonne `notes` du
+fichier de contexte.
 
 Toutes ces données sont publiées sous licence Creative Commons avec attribution. Les échéances du
 PGA-Eau viennent de la page « Préparer un plan de gestion des actifs en eau », sur quebec.ca.
