@@ -40,7 +40,7 @@ cumuler plusieurs exports sans compter deux fois le même dossier.
 - **Une base de données cumule les exports sans double compte.** Un même dossier peut revenir d'un
   export à l'autre, avec un montant différent : la base garde chaque version, mais ne compte que la
   dernière.
-- **Tout est reproductible** : trois programmes Python, 96 tests, et les mêmes fichiers donnent
+- **Tout est reproductible** : trois programmes Python, 65 tests, et les mêmes fichiers donnent
   toujours les mêmes chiffres.
 
 ## Ce qui a été fait
@@ -233,9 +233,8 @@ apparaître, sans jamais modifier une ligne existante. Une case sans chiffre y d
 | `Hors MRC` | la ville ne fait partie d'aucune MRC, d'après le répertoire |
 | `Aucune donnée` | la Stratégie publie la municipalité, mais sans aucune valeur |
 
-Une note vide veut simplement dire qu'il n'y a rien à signaler. Deux colonnes restent à compléter
-pour tout le monde, faute de source : la proximité d'un fleuve, d'un lac ou d'une rivière, et le type
-de milieu.
+Une note vide veut simplement dire qu'il n'y a rien à signaler. Une colonne reste à compléter pour
+tout le monde, faute de source : le type de milieu.
 
 **Trois défauts des fichiers sources ont été trouvés en chemin, et contournés.**
 
@@ -379,10 +378,10 @@ sans tenir compte des accents.
 | `schema.sql` | la structure de la base, en quatre groupes de tables |
 | `contexte_municipalites.csv` | le contexte de chaque organisme : les programmes y ajoutent des lignes et remplissent les cases « À compléter », mais **n'écrasent jamais une valeur** |
 | `regroupements.csv` | les municipalités regroupées depuis 2025, avec leurs sources officielles |
-| `test_analyser_seao.py` | 28 tests de l'analyse, sur de petits cas construits, sans lire le vrai export |
-| `test_completer_contexte.py` | 49 tests du contexte, inspirés de vrais homonymes et de vraies fautes d'écriture |
-| `test_charger_base.py` | 11 tests de la conversion des fiches, sans base de données |
-| `test_utilitaires.py` | 8 tests des petites fonctions partagées |
+| `test_analyser_seao.py` | 17 tests de l'analyse, sur de petits cas construits, sans lire le vrai export |
+| `test_completer_contexte.py` | 35 tests du contexte, inspirés de vrais homonymes et de vraies fautes d'écriture |
+| `test_charger_base.py` | 9 tests de la conversion des fiches, sans base de données |
+| `test_utilitaires.py` | 4 tests des petites fonctions partagées |
 | `requirements.txt` | les bibliothèques à installer |
 | `docs/` | les pages du site de suivi |
 | `zensical.toml` | la configuration du site |
@@ -417,7 +416,7 @@ python completer_contexte.py
 # Ranger le tout dans la base PostgreSQL (voir plus bas pour la préparer).
 python charger_base.py
 
-# Lancer les 96 tests.
+# Lancer les 65 tests.
 python -B -m unittest -v
 ```
 

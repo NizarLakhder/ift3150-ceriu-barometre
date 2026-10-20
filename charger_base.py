@@ -390,7 +390,6 @@ def charger_organismes(connexion):
         "nom": ligne["organisme"], "type": type_organisme(ligne["code_geographique"]),
         "code_geographique": texte(ligne["code_geographique"]) if type_organisme(ligne["code_geographique"]) == "municipalité" else None,
         "mrc_code": texte(ligne["code_geographique"]) if type_organisme(ligne["code_geographique"]) == "MRC ou communauté" else None,
-        "proximite_fleuve_lac_riviere": texte(ligne["proximite_fleuve_lac_riviere"]),
         "type_milieu": texte(ligne["type_milieu"]), "source_contexte": texte(ligne["source_contexte"]),
         "notes": texte(ligne["notes"]),
     } for ligne in contexte], "DO UPDATE", ["nom"])

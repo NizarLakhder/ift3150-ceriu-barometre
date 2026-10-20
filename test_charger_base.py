@@ -49,12 +49,11 @@ MATAGAMI = {
 class ConversionsTests(unittest.TestCase):
     """Les petites conversions qui transforment le texte publié en valeurs de base de données."""
 
-    def test_amounts_stay_exact(self):
+    def test_amounts_stay_exact_and_missing_values_become_null(self):
         # Pas de nombre à virgule flottante : 77061.99 reste exactement 77061.99.
         self.assertEqual(base.nombre(77061.99), Decimal("77061.99"))
         self.assertEqual(base.nombre("0.56544245"), Decimal("0.56544245"))
-
-    def test_missing_values_become_null_not_zero(self):
+        # Une valeur absente devient NULL, jamais zéro.
         for valeur in (None, "", "NULL", "À compléter", "pas un nombre"):
             self.assertIsNone(base.nombre(valeur))
         self.assertIsNone(base.texte("À compléter"))
@@ -100,14 +99,13 @@ class FicheTests(unittest.TestCase):
         self.assertEqual(lignes["fournisseurs"][0]["neq"], "1142385377")
         self.assertEqual([s["fournisseur_id"] for s in lignes["soumissionnaires"]], ["FO-1142385377"])
 
-    def test_award_with_two_suppliers_stops_the_load(self):
+    def test_inconsistent_fiche_stops_the_load(self):
         # Le schéma range le fournisseur dans l'attribution : deux fournisseurs ne rentrent pas.
         fiche = copy.deepcopy(MATAGAMI)
         fiche["awards"][0]["suppliers"].append({"name": "Autre", "id": "FO-2"})
         with self.assertRaises(ValueError):
             base.lignes_de_la_fiche(fiche, "test.json")
-
-    def test_contract_without_its_award_stops_the_load(self):
+        # Un contrat qui renvoie à une attribution absente de la fiche.
         fiche = copy.deepcopy(MATAGAMI)
         fiche["contracts"][0]["awardID"] = "99999999"
         with self.assertRaises(ValueError):

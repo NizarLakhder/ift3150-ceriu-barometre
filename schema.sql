@@ -127,15 +127,14 @@ CREATE TABLE IF NOT EXISTS organismes.organisme (
     type                         text NOT NULL CHECK (type IN ('municipalité', 'MRC ou communauté', 'non municipal')),
     code_geographique            char(5) REFERENCES territoire.municipalite,
     mrc_code                     text REFERENCES territoire.mrc,
-    proximite_fleuve_lac_riviere text,
     type_milieu                  text,
     source_contexte              text,
     notes                        text,
     CHECK (code_geographique IS NULL OR mrc_code IS NULL)
 );
 
--- Les identifiants d'acheteur du SEAO. Montréal en a 36, qui pointent tous
--- vers le même organisme.
+-- Les identifiants d'acheteur du SEAO. Montréal en a plusieurs dizaines, qui
+-- pointent tous vers le même organisme.
 CREATE TABLE IF NOT EXISTS organismes.acheteur (
     acheteur_id   text PRIMARY KEY CHECK (acheteur_id LIKE 'OP-%'),
     organisme_id  integer NOT NULL REFERENCES organismes.organisme,

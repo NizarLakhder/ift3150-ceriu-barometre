@@ -66,15 +66,13 @@ def code_de(correspondance):
 class NomsTests(unittest.TestCase):
     """Le SEAO et le répertoire n'écrivent pas les noms pareil : la clé doit les rapprocher."""
 
-    def test_designation_accents_and_articles_are_removed(self):
+    def test_designations_accents_articles_and_services_are_removed(self):
         self.assertEqual(contexte.cle_organisme("Ville de Sept-Îles"), "sept iles")
         self.assertEqual(contexte.cle_organisme("Ville de Sept-Îles"), contexte.cle_organisme("Sept-Îles"))
-
-    def test_stacked_designations_are_all_removed(self):
+        # Plusieurs désignations à la suite.
         self.assertEqual(contexte.cle_organisme("Municipalité de la Paroisse de Saint-Louis-de-Gonzague"),
                          contexte.cle_organisme("Saint-Louis-de-Gonzague"))
-
-    def test_purchasing_service_added_by_the_buyer_is_removed(self):
+        # Le service d'approvisionnement ajouté par l'acheteur.
         self.assertEqual(contexte.cle_organisme("Ville de Joliette - Approvisionnement"),
                          contexte.cle_organisme("Joliette"))
 
@@ -95,6 +93,10 @@ class RemplissageTests(unittest.TestCase):
         self.assertEqual(ligne["mrc"], "MRC Les Laurentides")
         self.assertEqual(ligne["notes"], "Saisie à la main")
         self.assertEqual((remplies, intactes), (1, 1))
+        # Une étiquette comme « Sans objet » ne remplace pas non plus une valeur écrite.
+        ligne = {"mrc": "MRC saisie à la main", "classe_taille": "À compléter"}
+        contexte.remplir_ligne(ligne, {"mrc": contexte.SANS_OBJET, "classe_taille": contexte.SANS_OBJET})
+        self.assertEqual(ligne, {"mrc": "MRC saisie à la main", "classe_taille": contexte.SANS_OBJET})
 
     def test_empty_cells_are_filled_but_empty_values_are_ignored(self):
         ligne = {"population": "", "classe_taille": "À compléter"}
@@ -124,11 +126,15 @@ class DepartagerTests(unittest.TestCase):
         choix, _ = contexte.departager("Ville de Disraeli", candidats, {"G0N1E0"})
         self.assertEqual(choix[1]["mcode"], "31015")
 
-    def test_generic_municipalite_is_not_a_clue(self):
-        # Cas réel : deux Saint-Elzéar, sans adresse publiée dans le SEAO.
+    def test_generic_words_are_not_clues(self):
+        # Cas réel : deux Saint-Elzéar, sans adresse publiée dans le SEAO. « Municipalité » ne dit rien.
         candidats = [municipalite("Saint-Elzéar", "Municipalité", "G0S2J1", "26022"),
                      municipalite("Saint-Elzéar", "Municipalité", "G0C2W0", "05050")]
         self.assertEqual(contexte.departager("Municipalité de Saint-Elzéar", candidats, set()), (None, None))
+        # « Municipalité de Ville-Marie » : « Ville » fait partie du nom, ce n'est pas une désignation.
+        candidats = [municipalite("Ville-Marie", "Ville", "J9V1V0", "1"),
+                     municipalite("Ville-Marie", "Municipalité", "J0Z0Z0", "2")]
+        self.assertEqual(contexte.departager("Municipalité de Ville-Marie", candidats, set()), (None, None))
 
     def test_contradicting_clues_leave_the_case_open(self):
         # Le code postal désigne la ville, mais le nom dit « Canton » : on ne choisit pas.
@@ -137,46 +143,37 @@ class DepartagerTests(unittest.TestCase):
         self.assertEqual(contexte.departager("Municipalité du Canton d'Exemple", candidats, {"A1A1A1"}),
                          (None, None))
 
-    def test_a_designation_word_inside_the_name_does_not_count(self):
-        # « Municipalité de Ville-Marie » : « Ville » fait partie du nom, ce n'est pas une désignation.
-        candidats = [municipalite("Ville-Marie", "Ville", "J9V1V0", "1"),
-                     municipalite("Ville-Marie", "Municipalité", "J0Z0Z0", "2")]
-        self.assertEqual(contexte.departager("Municipalité de Ville-Marie", candidats, set()), (None, None))
-
 
 class LectureDuNomTests(unittest.TestCase):
     """Avant de comparer, on sépare le nom lui-même des indices écrits autour."""
 
-    def test_tolerance_grows_with_the_length_of_the_word(self):
+    def test_tolerated_typos_depend_on_the_length_of_the_word(self):
         self.assertEqual(contexte.tolerance("paul", "paule"), 0)        # 4 lettres : aucune faute
         self.assertEqual(contexte.tolerance("simon", "simeon"), 1)      # 5 à 8 lettres : une faute
         self.assertEqual(contexte.tolerance("temiscamingue", "temiscaming"), 2)   # 9 lettres ou plus : deux
-
-    def test_two_swapped_letters_count_as_one_mistake(self):
-        # L'exemple donné en rencontre : « batiment » et « batimnet ».
+        # L'exemple donné en rencontre : « batiment » et « batimnet », deux lettres inversées, une seule faute.
         self.assertTrue(contexte.nom_proche(["batimnet"], "batiment"))
         self.assertFalse(contexte.nom_proche(["batiment"], "batiment"))   # identique : ce n'est pas un nom approché
         self.assertFalse(contexte.nom_proche(["paul"], "paule"))          # mot trop court pour tolérer une faute
 
-    def test_abbreviations_and_determiners_do_not_matter(self):
+    def test_abbreviations_determiners_and_misspelled_municipalite_do_not_matter(self):
         self.assertEqual(contexte.mots_utiles("Lac-St-Jean-Est"), contexte.mots_utiles("Lac-Saint-Jean-Est"))
         self.assertEqual(contexte.mots_utiles("Saint-Léon-de-Standon"), ["saint", "leon", "standon"])
         self.assertEqual(contexte.mots_utiles("Ste-Gertrude-Manneville"), ["sainte", "gertrude", "manneville"])
-
-    def test_designation_is_read_at_the_end_or_in_parentheses(self):
-        self.assertEqual(contexte.lire_nom_seao("Municipalité de Marston-Canton")["designation"], "Canton")
-        self.assertEqual(contexte.lire_nom_seao("Municipalité de Marston-Canton")["mots"], ["marston"])
-        self.assertEqual(contexte.lire_nom_seao("Municipalité de Melbourne (Canton)")["designation"], "Canton")
-
-    def test_place_in_parentheses_is_kept_as_a_clue(self):
-        lecture = contexte.lire_nom_seao("Municipalité de Saint-Stanislas (Saguenay Lac-St-Jean)")
-        self.assertEqual(lecture["mots"], ["saint", "stanislas"])
-        self.assertEqual(lecture["parentheses"], [["saguenay", "lac", "saint", "jean"]])
-
-    def test_misspelled_or_abbreviated_municipalite_is_recognised(self):
+        # « Municipalité » mal écrit ou abrégé est quand même reconnu.
         self.assertEqual(contexte.lire_nom_seao("Muncipalité d'Albanel")["mots"], ["albanel"])
         self.assertEqual(contexte.lire_nom_seao("M. Baie Sainte Catherine")["mots"], ["baie", "sainte", "catherine"])
         self.assertEqual(contexte.lire_nom_seao("M. Baie Sainte Catherine")["attendu"], "municipalité")
+
+    def test_designation_and_place_written_around_the_name_are_kept_as_clues(self):
+        # La désignation, à la fin du nom ou entre parenthèses.
+        self.assertEqual(contexte.lire_nom_seao("Municipalité de Marston-Canton")["designation"], "Canton")
+        self.assertEqual(contexte.lire_nom_seao("Municipalité de Marston-Canton")["mots"], ["marston"])
+        self.assertEqual(contexte.lire_nom_seao("Municipalité de Melbourne (Canton)")["designation"], "Canton")
+        # Un lieu entre parenthèses.
+        lecture = contexte.lire_nom_seao("Municipalité de Saint-Stanislas (Saguenay Lac-St-Jean)")
+        self.assertEqual(lecture["mots"], ["saint", "stanislas"])
+        self.assertEqual(lecture["parentheses"], [["saguenay", "lac", "saint", "jean"]])
 
     def test_short_designations_are_not_guessed(self):
         # « Mille » n'est qu'à une lettre de « Ville » : on ne le prend pas pour une désignation.
@@ -197,11 +194,10 @@ class RapprochementTolerantTests(unittest.TestCase):
         self.assertEqual(code_de(choix), "19020")
         self.assertIn(contexte.MEME_NOM, explication)
 
-    def test_region_in_parentheses_separates_two_homonyms(self):
+    def test_region_in_parentheses_must_fit_the_candidate(self):
+        # Elle sépare deux homonymes.
         choix, _, _ = self.rapprocher("Municipalité de Saint-Léon-le-Grand (Mauricie)")
         self.assertEqual(code_de(choix), "51035")
-
-    def test_region_that_fits_no_candidate_blocks_the_match(self):
         # Une seule Albanel existe, mais elle n'est pas en Estrie : on ne la retient pas.
         choix, _, candidats = self.rapprocher("Municipalité d'Albanel (Estrie)")
         self.assertIsNone(choix)
@@ -239,8 +235,6 @@ class RapprochementTolerantTests(unittest.TestCase):
         choix, explication, _ = self.rapprocher("Municipalité d'Albanle", {"G8M3J5"})
         self.assertEqual(code_de(choix), "92030")
         self.assertIn(contexte.NOM_APPROCHE, explication)
-
-    def test_typo_close_to_another_town_is_not_accepted_without_a_clue(self):
         # Cas trouvé en introduisant des fautes exprès : « Sainte-Irène » avec une lettre en
         # moins ressemble à « Saint-René ». Sans indice, on propose le candidat sans le retenir.
         choix, _, candidats = self.rapprocher("Municipalité de Sainte-Rene")
@@ -273,9 +267,6 @@ class RapprochementTolerantTests(unittest.TestCase):
         choix, _, _ = self.rapprocher(nom, {"J0L1T0"})
         self.assertEqual(choix[0], "organisme périmunicipal")
 
-    def test_unknown_name_finds_nothing(self):
-        self.assertEqual(self.rapprocher("Bixi Montréal"), (None, "aucun candidat", []))
-
 
 class RattachementTests(unittest.TestCase):
     """L'ordre des essais : le code déjà inscrit, le nom exact, puis les règles tolérantes."""
@@ -287,24 +278,27 @@ class RattachementTests(unittest.TestCase):
         ligne = {"organisme": organisme, "buyer_ids": "OP-1", "code_geographique": code}
         return contexte.rattacher(ligne, self.index, self.tolerant, self.par_code, {})
 
-    def test_code_written_in_the_context_wins_over_the_name(self):
+    def test_code_written_in_the_context_wins_but_is_checked(self):
         # C'est ainsi qu'on règle un homonyme à la main : on écrit le code, le programme fait le reste.
         correspondance, methode, echec = self.rattacher("Municipalité de Saint-Damase", code="07105")
         self.assertEqual(code_de(correspondance), "07105")
         self.assertIn("code géographique", methode)
         self.assertIsNone(echec)
-
-    def test_unknown_code_is_reported_not_guessed(self):
+        # Un code inconnu du répertoire est signalé, pas deviné.
         correspondance, _, echec = self.rattacher("Municipalité de Saint-Damase", code="99999")
         self.assertIsNone(correspondance)
         self.assertEqual(echec[0], "absent")
         self.assertIn("99999", echec[1])
 
-    def test_exact_name_needs_no_explanation(self):
+    def test_method_says_how_the_organism_was_found(self):
+        # Le nom exact n'a besoin d'aucune explication.
         correspondance, methode, echec = self.rattacher("Municipalité d'Albanel")
         self.assertEqual(code_de(correspondance), "92030")
         self.assertIsNone(methode)
         self.assertIsNone(echec)
+        # Une règle tolérante est nommée.
+        _, methode, _ = self.rattacher("Muncipalité d'Albanel")
+        self.assertTrue(methode.startswith("nom rapproché"))
 
     def test_homonyms_without_a_clue_are_listed_with_their_codes(self):
         correspondance, _, echec = self.rattacher("Municipalité de Saint-Damase")
@@ -328,13 +322,10 @@ class RattachementTests(unittest.TestCase):
 
     def test_non_municipal_organisms_are_set_apart(self):
         # Ni municipalité ni MRC dans le nom, et inconnu du répertoire : rien à compléter.
+        self.assertEqual(contexte.rapprocher("Bixi Montréal", self.tolerant), (None, "aucun candidat", []))
         self.assertEqual(self.rattacher("Bixi Montréal")[2][0], "non municipal")
         # Un nom qui annonce une municipalité devrait être dans le répertoire : il reste à vérifier.
         self.assertEqual(self.rattacher("Municipalité de Quelquepart")[2][0], "absent")
-
-    def test_tolerant_rule_is_named_in_the_method(self):
-        _, methode, _ = self.rattacher("Muncipalité d'Albanel")
-        self.assertTrue(methode.startswith("nom rapproché"))
 
 
 class EtiquettesTests(unittest.TestCase):
@@ -346,8 +337,6 @@ class EtiquettesTests(unittest.TestCase):
         self.assertEqual(valeurs["region_administrative"], "Saguenay--Lac-Saint-Jean (02)")
         for champ in ("mrc", "classe_taille", "particularites_infrastructures"):
             self.assertEqual(valeurs[champ], contexte.SANS_OBJET)
-
-    def test_metropolitan_community_has_no_single_region(self):
         # Cas réel : le répertoire ne donne aucune région aux deux communautés métropolitaines.
         valeurs = contexte.valeurs_mrc({"mrccod": "CM663", "mrcpopul": "4305251", "mrcregion": ""}, "source")
         self.assertEqual(valeurs["region_administrative"], contexte.SANS_OBJET)
@@ -357,21 +346,15 @@ class EtiquettesTests(unittest.TestCase):
         valeurs = contexte.valeurs_municipalite({"mcode": "66023", "mpopul": "1913561", "mrc": ""}, {}, "source")
         self.assertEqual(valeurs["mrc"], contexte.HORS_MRC)
 
-    def test_water_data_published_without_values_says_so(self):
+    def test_water_data_says_whether_it_is_missing_or_empty(self):
+        # La Stratégie publie la municipalité, mais sans aucune valeur.
         eau = {"12345": {"classe": "Aucune donnée", "pop_desservie": "NULL", "validite": ""}}
         valeurs = contexte.valeurs_municipalite({"mcode": "12345", "mrc": "MRC Test (123)"}, eau, "source")
         self.assertEqual(valeurs["classe_taille"], "Aucune donnée")
         self.assertEqual(valeurs["particularites_infrastructures"], contexte.AUCUNE_DONNEE)
-
-    def test_town_missing_from_the_water_files_stays_to_complete(self):
         # Absente des fichiers, la donnée pourrait venir dans une prochaine édition : rien n'est inscrit.
         valeurs = contexte.valeurs_municipalite({"mcode": "14082", "mrc": "MRC Kamouraska (140)"}, {}, "source")
         self.assertEqual(valeurs["particularites_infrastructures"], "")
-
-    def test_labels_never_replace_a_value_already_written(self):
-        ligne = {"mrc": "MRC saisie à la main", "classe_taille": "À compléter"}
-        contexte.remplir_ligne(ligne, {"mrc": contexte.SANS_OBJET, "classe_taille": contexte.SANS_OBJET})
-        self.assertEqual(ligne, {"mrc": "MRC saisie à la main", "classe_taille": contexte.SANS_OBJET})
 
     def test_empty_note_becomes_blank_but_a_written_note_is_kept(self):
         vide, ecrite = {"notes": "À compléter"}, {"notes": "Vérifié par téléphone"}

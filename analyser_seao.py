@@ -79,7 +79,7 @@ QUALITY_CSV = DOSSIER_SORTIES / "qualite_donnees.csv"
 # à la main ou avec completer_contexte.py.
 CONTEXT_FIELDS = (
     "code_geographique", "population", "classe_taille", "superficie_km2",
-    "region_administrative", "mrc", "proximite_fleuve_lac_riviere", "type_milieu",
+    "region_administrative", "mrc", "type_milieu",
     "particularites_infrastructures", "source_contexte", "notes",
 )
 
@@ -618,7 +618,6 @@ def build_context_rows(summaries, rows):
             "superficie_km2": "À compléter",
             "region_administrative": "À compléter",
             "mrc": "À compléter",
-            "proximite_fleuve_lac_riviere": "À compléter",
             "type_milieu": "À compléter",
             "particularites_infrastructures": "À compléter",
             "source_contexte": "À compléter",

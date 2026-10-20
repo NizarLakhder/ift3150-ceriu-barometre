@@ -56,8 +56,8 @@ Ce que le programme s'interdit :
     (sorties/*enrichir*.csv) : lancer l'analyse avant ce programme;
   - se fier à une ressemblance : un nom seulement approché, raccourci ou
     allongé n'est retenu que si un indice le confirme;
-  - inventer : la proximité d'un cours d'eau et le type de milieu restent
-    à compléter, puisqu'aucun de ces fichiers ne les fournit.
+  - inventer : le type de milieu reste à compléter, puisqu'aucun de ces
+    fichiers ne le fournit.
 
 Une case sans chiffre n'est pas forcément une donnée manquante. Le fichier de
 contexte emploie quatre mots, pour que chacun dise la vérité :
@@ -922,8 +922,7 @@ def main():
         print(f"Notes « À compléter » vidées        : {notes_videes}  (rien à signaler)")
     print(f"\n{CONTEXTE_CSV} mis à jour (sauvegarde dans {DOSSIER_SORTIES / (CONTEXTE_CSV.name + '.bak')})")
     print(f"{A_VERIFIER_CSV} liste les cas à traiter à la main.")
-    print("La proximité d'un cours d'eau et le type de milieu restent à documenter :")
-    print("aucun de ces fichiers ne fournit ces informations.")
+    print("Le type de milieu reste à documenter : aucun de ces fichiers ne le fournit.")
 
 
 if __name__ == "__main__":

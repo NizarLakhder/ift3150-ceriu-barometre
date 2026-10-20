@@ -95,7 +95,7 @@ ont directement orienté la suite du projet.
 
 Ce qui a pu être vérifié à ce stade :
 
-- 96 tests automatisés vérifient les comportements délicats du code, comme l'identification des
+- 65 tests automatisés vérifient les comportements délicats du code, comme l'identification des
   fournisseurs, la protection des saisies manuelles, le départage des homonymes et la tolérance aux
   fautes de frappe;
 - les programmes donnent exactement les mêmes résultats d'une exécution à l'autre, et chaque

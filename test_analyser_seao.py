@@ -57,7 +57,8 @@ class SupplierIdentityTests(unittest.TestCase):
     première version du code coupait en deux fournisseurs.
     """
 
-    def test_same_identifier_with_several_names_is_one_supplier(self):
+    def test_supplier_is_identified_by_its_identifier_not_its_name(self):
+        # Le même identifiant sous deux noms : un seul fournisseur.
         releases = [
             municipal_release(suppliers=[{"id": "FO-1", "name": "Entreprise ABC"}]),
             municipal_release("ocds-test-2", suppliers=[{
@@ -72,7 +73,7 @@ class SupplierIdentityTests(unittest.TestCase):
         self.assertIn("FO-1", display)
         self.assertTrue(any(name in display for name in names["FO-1"]))
 
-    def test_same_name_with_two_identifiers_stays_two_suppliers(self):
+        # Le même nom sous deux identifiants : deux fournisseurs.
         rows, names = rows_and_names([municipal_release(suppliers=[
             {"id": "FO-1", "name": "Entreprise ABC"},
             {"id": "FO-2", "name": "Entreprise ABC"},
@@ -155,23 +156,23 @@ class IdentifierValidationTests(unittest.TestCase):
     """Plusieurs versions d'un même dossier sont acceptées; un identifiant absent
     ou en double arrête le programme."""
 
-    def test_same_release_identifier_in_different_processes_is_allowed(self):
+    def test_several_versions_of_a_process_are_allowed(self):
+        # Le même numéro de fiche dans deux dossiers différents.
         analyse.validate_identifiers([
             municipal_release("ocds-test-1", "20260907120000"),
             municipal_release("ocds-test-2", "20260907120000"),
         ])
-
-    def test_several_versions_of_process_and_contract_are_allowed(self):
+        # Deux versions du même dossier et du même contrat.
         analyse.validate_identifiers([
             municipal_release("ocds-test-1", "20260907120000", contracts=[{"id": "C-1"}]),
             municipal_release("ocds-test-1", "20260908120000", contracts=[{"id": "C-1"}]),
         ])
 
-    def test_duplicate_process_release_pair_is_rejected(self):
+    def test_missing_or_duplicate_identifiers_are_rejected(self):
+        # La même fiche deux fois.
         with self.assertRaises(ValueError):
             analyse.validate_identifiers([municipal_release(), municipal_release()])
-
-    def test_missing_process_or_release_identifier_is_rejected(self):
+        # Un numéro de dossier ou de fiche absent.
         for field in ("ocid", "id"):
             for missing in (None, "", "   "):
                 with self.subTest(field=field, missing=missing):
@@ -179,12 +180,9 @@ class IdentifierValidationTests(unittest.TestCase):
                     release[field] = missing
                     with self.assertRaises(ValueError):
                         analyse.validate_identifiers([release])
-
-    def test_missing_contract_identifier_is_rejected(self):
+        # Un contrat sans identifiant, ou deux fois le même contrat dans une fiche.
         with self.assertRaises(ValueError):
             analyse.validate_identifiers([municipal_release(contracts=[{}])])
-
-    def test_duplicate_contract_identifier_within_release_is_rejected(self):
         with self.assertRaises(ValueError):
             analyse.validate_identifiers([municipal_release(contracts=[
                 {"id": "C-1"}, {"id": "C-1"},
@@ -257,7 +255,16 @@ class ContextPreservationTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), before)
             self.assertEqual(analyse.merge_context_rows([context_row()], loaded)[0]["population"], "1234")
 
-    def test_first_migration_keeps_manual_values_extra_columns_and_absent_organisms(self):
+    def test_missing_source_is_created_once_without_losing_anything(self):
+        # Sans fichier de saisie ni ancienne vue : on part d'une vue vierge.
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.csv"
+            loaded = analyse.load_context_source(source, Path(directory) / "absent.csv", [context_row()])
+            self.assertTrue(source.exists())
+            self.assertEqual(loaded, [context_row()])
+
+        # Avec une ancienne vue : les saisies, les colonnes ajoutées à la main et les
+        # organismes absents du nouvel export sont gardés, et le fichier n'est créé qu'une fois.
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "source.csv"
             generated = Path(directory) / "vue.csv"
@@ -276,58 +283,6 @@ class ContextPreservationTests(unittest.TestCase):
             analyse.load_context_source(source, generated, [context_row()])
             self.assertEqual(source.read_bytes(), before)
 
-    def test_first_run_without_previous_csv_creates_blank_source(self):
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "source.csv"
-            loaded = analyse.load_context_source(source, Path(directory) / "absent.csv", [context_row()])
-            self.assertTrue(source.exists())
-            self.assertEqual(loaded, [context_row()])
-
-    def test_identifier_order_and_organism_spelling_do_not_erase_context(self):
-        source = context_row("Ancien nom", "OP-2 | OP-1", population="1234")
-        target = context_row("Nom actuel", "OP-1 | OP-2")
-        merged = analyse.merge_context_rows([target], [source])[0]
-        self.assertEqual(merged["population"], "1234")
-        self.assertEqual(merged["organisme"], "Nom actuel")
-        self.assertEqual(target["population"], "À compléter")
-
-    def test_name_fallback_only_when_source_has_no_identifiers(self):
-        source = context_row("Ville de Test.", "", population="1234")
-        self.assertEqual(analyse.merge_context_rows([context_row()], [source])[0]["population"], "1234")
-        with self.assertRaises(ValueError):
-            analyse.merge_context_rows([context_row()], [context_row(buyer_ids="OP-9", population="1234")])
-
-    def test_ambiguous_source_identifiers_are_rejected(self):
-        with self.assertRaises(ValueError):
-            analyse.merge_context_rows([context_row()], [
-                context_row(population="1234"),
-                context_row("Autre organisme", "OP-1 | OP-2", population="5678"),
-            ])
-
-    def test_ambiguous_names_without_identifiers_are_rejected(self):
-        with self.assertRaises(ValueError):
-            analyse.merge_context_rows([context_row()], [context_row(buyer_ids=""), context_row(buyer_ids="")])
-
-    def test_partly_changed_identifier_set_keeps_the_context(self):
-        # Un organisme peut publier sous plus ou moins d'identifiants selon
-        # l'export, comme la Ville de Montréal (31 identifiants une semaine,
-        # 36 le mois d'août). Le même nom et un identifiant en commun suffisent
-        # alors à retrouver sa ligne de contexte.
-        source = context_row(buyer_ids="OP-1 | OP-2", population="1234")
-        merged = analyse.merge_context_rows([context_row()], [source])[0]
-        self.assertEqual(merged["population"], "1234")
-
-    def test_shared_identifier_with_another_name_is_rejected(self):
-        # Un identifiant commun ne suffit pas si le nom diffère : la population
-        # d'un organisme ne doit jamais passer à un autre sans vérification.
-        source = context_row("Autre ville", "OP-1 | OP-2", population="1234")
-        with self.assertRaises(ValueError):
-            analyse.merge_context_rows([context_row(buyer_ids="OP-1")], [source])
-
-    def test_identifier_set_with_nothing_in_common_is_rejected(self):
-        with self.assertRaises(ValueError):
-            analyse.merge_context_rows([context_row()], [context_row(buyer_ids="OP-8 | OP-9", population="1234")])
-
     def test_failed_migration_does_not_create_source_or_modify_old_view(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "source.csv"
@@ -338,6 +293,48 @@ class ContextPreservationTests(unittest.TestCase):
                 analyse.load_context_source(source, generated, [context_row()])
             self.assertFalse(source.exists())
             self.assertEqual(generated.read_bytes(), before)
+
+    def test_context_line_is_found_again(self):
+        # L'ordre des identifiants et l'écriture du nom ne comptent pas.
+        source = context_row("Ancien nom", "OP-2 | OP-1", population="1234")
+        target = context_row("Nom actuel", "OP-1 | OP-2")
+        merged = analyse.merge_context_rows([target], [source])[0]
+        self.assertEqual(merged["population"], "1234")
+        self.assertEqual(merged["organisme"], "Nom actuel")
+        self.assertEqual(target["population"], "À compléter")
+
+        # Un organisme peut publier sous plus ou moins d'identifiants selon
+        # l'export, comme la Ville de Montréal (31 identifiants une semaine,
+        # 36 le mois d'août). Le même nom et un identifiant en commun suffisent
+        # alors à retrouver sa ligne de contexte.
+        source = context_row(buyer_ids="OP-1 | OP-2", population="1234")
+        self.assertEqual(analyse.merge_context_rows([context_row()], [source])[0]["population"], "1234")
+
+        # Une ligne saisie sans aucun identifiant se retrouve par le nom.
+        source = context_row("Ville de Test.", "", population="1234")
+        self.assertEqual(analyse.merge_context_rows([context_row()], [source])[0]["population"], "1234")
+
+    def test_doubtful_matches_stop_the_program(self):
+        # Le nom ne sert que si la ligne n'a aucun identifiant : un identifiant différent arrête.
+        with self.assertRaises(ValueError):
+            analyse.merge_context_rows([context_row()], [context_row(buyer_ids="OP-9", population="1234")])
+        # Deux lignes revendiquent le même identifiant.
+        with self.assertRaises(ValueError):
+            analyse.merge_context_rows([context_row()], [
+                context_row(population="1234"),
+                context_row("Autre organisme", "OP-1 | OP-2", population="5678"),
+            ])
+        # Deux lignes sans identifiant portent le même nom.
+        with self.assertRaises(ValueError):
+            analyse.merge_context_rows([context_row()], [context_row(buyer_ids=""), context_row(buyer_ids="")])
+        # Un identifiant commun ne suffit pas si le nom diffère : la population
+        # d'un organisme ne doit jamais passer à un autre sans vérification.
+        source = context_row("Autre ville", "OP-1 | OP-2", population="1234")
+        with self.assertRaises(ValueError):
+            analyse.merge_context_rows([context_row(buyer_ids="OP-1")], [source])
+        # Aucun identifiant en commun.
+        with self.assertRaises(ValueError):
+            analyse.merge_context_rows([context_row()], [context_row(buyer_ids="OP-8 | OP-9", population="1234")])
 
     def test_new_organisms_are_appended_without_changing_existing_lines(self):
         # Un nouvel export fait apparaître un organisme inconnu : il est ajouté à

@@ -12,49 +12,35 @@ from pathlib import Path
 import utilitaires as u
 
 
-class TexteTests(unittest.TestCase):
+class UtilitairesTests(unittest.TestCase):
 
-    def test_spaces_are_reduced_and_missing_value_is_empty(self):
+    def test_text_and_organism_names_are_cleaned(self):
         self.assertEqual(u.clean_text("  Ville   de\tMatagami "), "Ville de Matagami")
         self.assertEqual(u.clean_text(None), "")
-
-    def test_final_punctuation_of_an_organism_name_is_removed(self):
         # Cas réel : le SEAO écrit souvent « Ville de Lévis. », avec un point final.
         self.assertEqual(u.clean_org_name("Ville de Lévis. "), "Ville de Lévis")
         self.assertEqual(u.clean_org_name("Municipalité  de Saint-Elzéar"), "Municipalité de Saint-Elzéar")
-
-
-class MontantsTests(unittest.TestCase):
 
     def test_missing_amount_is_none_not_zero(self):
         self.assertEqual(u.safe_float("4892.19"), 4892.19)
         self.assertIsNone(u.safe_float(None))
         self.assertIsNone(u.safe_float("n/d"))
-
-    def test_amount_is_written_the_quebec_way(self):
+        # À l'affichage, un montant s'écrit à la québécoise, et un montant absent ne devient pas 0 $.
         self.assertEqual(u.format_money(77061.99), "77 061,99 $")
         self.assertEqual(u.format_money(None), "Non disponible")
-
-
-class DatesTests(unittest.TestCase):
 
     def test_fictitious_seao_date_and_malformed_dates_are_dropped(self):
         self.assertEqual(u.valid_date("2026-09-08T00:00:00-04:00"), "2026-09-08")
         self.assertEqual(u.valid_date("0001-01-01T00:00:00-05:00"), "")
         self.assertEqual(u.valid_date("8 septembre"), "")
-
-    def test_date_is_read_in_the_release_identifier(self):
+        # La date se lit aussi dans le numéro de la fiche.
         self.assertEqual(u.date_from_release_id({"id": "20260911172212"}), "2026-09-11")
         self.assertEqual(u.date_from_release_id({"id": "abc"}), "")
 
-
-class ResumesEtFichiersTests(unittest.TestCase):
-
-    def test_most_frequent_values_are_summarised_without_empty_ones(self):
+    def test_summaries_and_csv_files_are_readable(self):
         self.assertEqual(u.top(Counter({"gré à gré": 3, "": 9, "appel d'offres": 2})),
                          "gré à gré (3); appel d'offres (2)")
-
-    def test_csv_is_written_with_bom_and_an_empty_list_writes_nothing(self):
+        # Le BOM du début de fichier permet à Excel d'afficher les accents. Une liste vide n'écrit rien.
         with tempfile.TemporaryDirectory() as dossier:
             chemin = Path(dossier) / "test.csv"
             u.write_csv(chemin, [{"organisme": "Ville de Matagami", "population": "1352"}])
