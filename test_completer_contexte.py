@@ -393,7 +393,10 @@ class SourcesTests(unittest.TestCase):
 
     def test_postal_codes_are_read_from_the_analysis_views(self):
         with tempfile.TemporaryDirectory() as dossier:
-            with open(Path(dossier) / "a_enrichir_test.csv", "w", encoding="utf-8-sig", newline="") as fichier:
+            # Chaque export a son sous-dossier dans sorties/.
+            vue = Path(dossier) / "hebdo_test" / "a_enrichir.csv"
+            vue.parent.mkdir()
+            with open(vue, "w", encoding="utf-8-sig", newline="") as fichier:
                 ecrivain = csv.DictWriter(fichier, fieldnames=["organisme", "buyer_ids", "code_postal_seao"])
                 ecrivain.writeheader()
                 ecrivain.writerow({"organisme": "Ville de Test", "buyer_ids": "OP-1 | OP-2",

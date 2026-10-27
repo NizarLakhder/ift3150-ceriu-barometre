@@ -53,7 +53,7 @@ Ce que le programme s'interdit :
     Village, Ville, Paroisse) ou une région écrite entre parenthèses. Sans
     indice, il ne remplit rien et signale le cas, avec les candidats.
     Les codes postaux sont lus dans les vues produites par analyser_seao.py
-    (sorties/*enrichir*.csv) : lancer l'analyse avant ce programme;
+    (sorties/<période>/a_enrichir.csv) : lancer l'analyse avant ce programme;
   - se fier à une ressemblance : un nom seulement approché, raccourci ou
     allongé n'est retenu que si un indice le confirme;
   - inventer : le type de milieu reste à compléter, puisqu'aucun de ces
@@ -356,7 +356,7 @@ def lire_codes_postaux_seao(dossier=DOSSIER_SORTIES):
     vues produites par analyser_seao.py, pour toutes les périodes analysées.
     """
     codes = {}
-    for chemin in sorted(Path(dossier).glob("*enrichir*.csv")):
+    for chemin in sorted(Path(dossier).glob("*/a_enrichir.csv")):
         with chemin.open(encoding="utf-8-sig", newline="") as fichier:
             for ligne in csv.DictReader(fichier):
                 for identifiant in (ligne.get("buyer_ids") or "").split("|"):

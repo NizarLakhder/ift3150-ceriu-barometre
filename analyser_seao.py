@@ -33,9 +33,9 @@ Utilisation :
     python analyser_seao.py                                  # export de la semaine
     python analyser_seao.py mensuel_20260801_20260831.json   # un autre export
 
-Sans argument, les sorties gardent leurs noms habituels, ceux vers lesquels
-pointe le rapport destiné au CERIU. Avec un autre export, elles portent le nom
-de la période, pour que deux périodes puissent coexister dans sorties/.
+Chaque export a son dossier dans sorties/, au nom de sa période, par exemple
+sorties/hebdo_20260907_20260913/ : les quatre tableaux s'y appellent
+details.csv, comparaison.csv, a_enrichir.csv et qualite.csv.
 
 Le contexte municipal vit dans contexte_municipalites.csv. Ce programme le crée
 au premier lancement. Ensuite, il y ajoute seulement, à la fin, les organismes
@@ -53,6 +53,7 @@ import re
 import shutil
 import statistics
 import sys
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -65,15 +66,13 @@ from utilitaires import (clean_org_name, clean_text, date_from_release_id, forma
 DOSSIER_SEAO = Path("donnees_seao")
 DOSSIER_SORTIES = Path("sorties")
 
-# L'export analysé quand on ne donne aucun argument, et ses quatre sorties.
-# Ces noms datent d'avant le renommage du script (analyse_municipalites.py);
-# on les garde parce que d'autres documents renvoient vers eux.
+# L'export analysé quand on ne donne aucun argument, et le fichier de contexte.
 JSON_FILE = DOSSIER_SEAO / "hebdo_20260907_20260913.json"
-DETAILS_CSV = DOSSIER_SORTIES / "analyse_municipalites_details.csv"
-SUMMARY_CSV = DOSSIER_SORTIES / "comparaison_municipalites.csv"
-CONTEXT_CSV = DOSSIER_SORTIES / "municipalites_a_enrichir.csv"
 CONTEXT_SOURCE_CSV = Path("contexte_municipalites.csv")
-QUALITY_CSV = DOSSIER_SORTIES / "qualite_donnees.csv"
+# L'ancienne vue de contexte, d'avant l'existence du fichier de contexte. Elle ne
+# sert qu'à créer ce fichier une première fois sans perdre de saisie (voir
+# load_context_source).
+ANCIENNE_VUE_CONTEXTE = DOSSIER_SORTIES / "municipalites_a_enrichir.csv"
 
 # Les colonnes de contexte. Le SEAO n'en fournit aucune : elles se remplissent
 # à la main ou avec completer_contexte.py.
@@ -411,6 +410,61 @@ def is_pga_eau(titre):
     return "gestion" in t and "actif" in t and re.search(r"\beaux?\b", t) is not None
 
 
+def texte_de_recherche(texte):
+    """Le texte en minuscules, sans accents, avec des apostrophes droites : « Égout » devient « egout »."""
+    texte = (texte or "").replace("’", "'").replace("ʼ", "'")
+    return unicodedata.normalize("NFD", texte).encode("ascii", "ignore").decode().lower()
+
+
+# Le repérage large de la gestion des actifs en eau. Les mots sont écrits sans accents.
+GESTION_ACTIFS = r"gestion (des|d'|de l')\s*actifs?"
+MOTS_RESEAUX_EAU = r"aqueduc|egout|eaux? potable|eaux? usee|conduite|pluvial|hydrauli|sanitaire|assainissement|tecq|\beaux?\b"
+# Les autres actifs attendront leur propre repérage : bâtiments, routes, véhicules...
+MOTS_AUTRES_ACTIFS = r"batiment|immeuble|immobili|vehicule|flotte|tennis|mobilier|transport"
+MOTS_ROUTES = r"routier|piirl|pisrmm|pavl|securite routiere"
+
+
+def gestion_actifs_eau(titre, description=""):
+    """Repère tout ce qui touche à la gestion des actifs en eau, et dit de quelle famille il s'agit.
+
+    is_pga_eau reconnaît le PGA-Eau lui-même, et rien d'autre. Ce repérage-ci
+    est plus large : il propose aussi les démarches voisines, que l'on classe
+    ensuite à la main dans demarches.csv. Les familles, dans l'ordre :
+      - « PGA-Eau » : is_pga_eau sur le titre, ou l'acronyme dans la description;
+      - « outil » : un logiciel, une licence ou une solution de gestion d'actifs;
+      - « étape » : une inspection, une auscultation, un portrait ou un
+        inventaire fait « dans le cadre » d'un PGA, d'un plan d'intervention ou
+        d'une démarche de gestion d'actifs;
+      - « plan d'intervention » : un plan d'intervention sur les réseaux d'eau,
+        pas un plan routier (PIIRL, sécurité routière, voirie locale);
+      - « gestion d'actifs » : un plan ou un mandat de gestion des actifs qui
+        ne dit pas « eau », mais qui porte sur les infrastructures municipales,
+        comme le « plan gestion des actifs des infrastructures complet » de
+        Clermont.
+    Les bâtiments, les véhicules et le transport sont laissés de côté pour
+    l'instant. Retourne la famille, ou une chaîne vide.
+
+    Mesure sur les sept exports chargés : voir le suivi de la semaine 8.
+    """
+    t = texte_de_recherche(titre)
+    texte = texte_de_recherche(f"{titre} {description}")
+    if is_pga_eau(titre) or re.search(r"\bpga[\W_]*eaux?\b", texte):
+        return "PGA-Eau"
+    if re.search(MOTS_AUTRES_ACTIFS, t):
+        return ""
+    if re.search(GESTION_ACTIFS, t) and re.search(r"logiciel|licence|abonnement|solution|plateforme|progiciel", t):
+        return "outil"
+    if (re.search(r"inspection|auscultation|portrait|inventaire", t)
+            and re.search(r"dans le cadre (du|de la|des|d'un|d'une)\b.*(\bpga\b|plans? d'intervention|plans? de gestion|"
+                          + GESTION_ACTIFS + ")", texte)):
+        return "étape"
+    if re.search(r"plans? d'intervention", t) and re.search(MOTS_RESEAUX_EAU, texte) and not re.search(MOTS_ROUTES, t):
+        return "plan d'intervention"
+    if re.search(GESTION_ACTIFS, t) and re.search(r"infrastructure|ingenierie|\bpti\b|municipa|reseau", t):
+        return "gestion d'actifs"
+    return ""
+
+
 def analyse_release(release):
     """Transforme une fiche municipale en une ligne du tableau détaillé.
 
@@ -488,6 +542,7 @@ def analyse_release(release):
         "nature_transaction": nature,
         "lie_eau": "oui" if lie_eau else "non",
         "pga_eau": "oui" if is_pga_eau(titre) else "non",
+        "gestion_actifs_eau": gestion_actifs_eau(titre, clean_text(tender.get("description"))),
         # Ces noms servent à la lecture, jamais au calcul. Les deux colonnes sont
         # triées chacune de leur côté : le 2e nom ne correspond pas forcément au
         # 2e identifiant. Le lien exact nom-identifiant reste dans le JSON.
@@ -905,21 +960,17 @@ def trouver_fichier_json(nom):
 
 
 def noms_de_sortie(fichier_json):
-    """Choisit les noms des quatre CSV selon l'export analysé.
+    """Choisit les chemins des quatre CSV selon l'export analysé.
 
-    Pour l'export de la semaine, on garde les noms habituels, vers lesquels
-    d'autres documents renvoient. Pour tout autre export, les sorties
-    prennent le nom de la période, par exemple
-    details_mensuel_20260801_20260831.csv : deux périodes peuvent ainsi
-    coexister sans que l'une écrase l'autre.
+    Chaque export a son dossier dans sorties/, au nom de sa période, par
+    exemple sorties/mensuel_20260801_20260831/details.csv. Les périodes
+    coexistent sans que l'une écrase l'autre, et le dossier reste lisible
+    quand les exports s'accumulent : un sous-dossier par export, au lieu de
+    quatre fichiers.
     """
-    if Path(fichier_json) == JSON_FILE:
-        return DETAILS_CSV, SUMMARY_CSV, CONTEXT_CSV, QUALITY_CSV
-    periode = Path(fichier_json).stem
-    return (DOSSIER_SORTIES / f"details_{periode}.csv",
-            DOSSIER_SORTIES / f"comparaison_{periode}.csv",
-            DOSSIER_SORTIES / f"a_enrichir_{periode}.csv",
-            DOSSIER_SORTIES / f"qualite_{periode}.csv")
+    dossier = DOSSIER_SORTIES / Path(fichier_json).stem
+    return (dossier / "details.csv", dossier / "comparaison.csv",
+            dossier / "a_enrichir.csv", dossier / "qualite.csv")
 
 
 def main():
@@ -967,7 +1018,7 @@ def main():
     summaries = aggregate_municipalities(details, supplier_names_by_id)
     context_rows = build_context_rows(summaries, details)
     quality_rows = build_quality_rows(details, supplier_names_by_id)
-    context_source = load_context_source(CONTEXT_SOURCE_CSV, CONTEXT_CSV, context_rows)
+    context_source = load_context_source(CONTEXT_SOURCE_CSV, ANCIENNE_VUE_CONTEXTE, context_rows)
     nouveaux = []
     context_rows = merge_context_rows(context_rows, context_source, absents=nouveaux)
 
@@ -975,6 +1026,7 @@ def main():
     # contexte les organismes qu'il ne connaît pas encore, sans toucher aux
     # lignes existantes ; ensuite, on n'écrit plus que dans sorties/.
     ajoutes = append_context_rows(CONTEXT_SOURCE_CSV, nouveaux)
+    details_csv.parent.mkdir(exist_ok=True)
     write_csv(details_csv, details)
     write_csv(summary_csv, summaries)
     write_csv(context_csv, context_rows)

@@ -229,6 +229,48 @@ class PgaEauDetectionTests(unittest.TestCase):
         self.assertEqual(analyse.aggregate_municipalities(rows, names)[0]["nb_avis_pga_eau"], 1)
 
 
+class GestionActifsEauTests(unittest.TestCase):
+    """Le repérage large : tout ce qui touche à la gestion des actifs en eau, à classer ensuite à la main."""
+
+    def test_real_water_asset_management_titles_are_recognized(self):
+        cas = {
+            "Mise à jour du plan d'intervention dans le cadre de la TECQ 2024-2028": "plan d'intervention",  # Laurierville
+            "Mise à jour du plan d'intervention pour les réseaux d'aqueduc, d'égouts et des chaussées":
+                "plan d'intervention",                                                         # Roberval
+            "FOURNITURE DE SERVICES PROFESSIONNELS D’INGÉNIERIE POUR LA MISE À JOUR DU PLAN D’INTERVENTION POUR LES "
+            "RÉSEAUX D’AQUEDUC": "plan d'intervention",                                       # Marieville, apostrophes courbes
+            "Réalisation plan gestion des actifs des infrastructures complet": "gestion d'actifs",  # Clermont
+            "GESTION D'ACTIFS - MANDAT SUR PTI": "gestion d'actifs",                           # Saguenay
+            "Logiciel de gestion des actifs": "outil",                                         # Magog
+            "Inspections télévisées des conduites dans le cadre de la mise à jour du plan d'intervention": "étape",  # Disraeli
+            "Renforcement stratégique pour l'élaboration du PGA-EAU": "PGA-Eau",               # Matagami
+        }
+        for titre, famille in cas.items():
+            with self.subTest(titre=titre[:60]):
+                self.assertEqual(analyse.gestion_actifs_eau(titre), famille)
+        # La description compte aussi, quand le titre ne dit rien.
+        self.assertEqual(analyse.gestion_actifs_eau("Services professionnels en ingénierie",
+                                                    "Accompagnement pour l'élaboration du PGA-Eau de la municipalité"),
+                         "PGA-Eau")
+
+    def test_other_assets_and_routine_work_are_left_aside(self):
+        pieges = [
+            "Élaboration d'un plan d'intervention en infrastructures routières locales (PIIRL)",  # routes
+            "Plan d'intervention de sécurité routière en milieu municipal",
+            "Services professionnels - Élaboration d'un plan d'intervention (Dans le cadre du PAVL 2021-2025)",
+            "Services professionnels pour établir un diagnostic et élaboration d'un plan d'intervention pour certains "
+            "terrains de tennis",
+            "Réalisation et implantation d’un programme de gestion des actifs des bâtiments municipaux",  # plus tard
+            "Fourniture et installation du mobilier pour le Centre de gestion des actifs",
+            "Services professionnels pour l’accompagnement opérationnel d'un Plan stratégique de gestion des actifs",  # ARTM
+            "Inspection télévisée des conduites d'égout",                                      # routine, sans plan
+            "Plan de gestion des eaux pluviales",
+        ]
+        for titre in pieges:
+            with self.subTest(titre=titre[:60]):
+                self.assertEqual(analyse.gestion_actifs_eau(titre), "")
+
+
 def context_row(name="Ville de Test", buyer_ids="OP-1", **values):
     """Fabrique une ligne de contexte où tout est « À compléter », sauf les valeurs données."""
     row = {"organisme": name, "buyer_ids": buyer_ids,
