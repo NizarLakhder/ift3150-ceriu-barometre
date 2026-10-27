@@ -72,6 +72,19 @@ class ConversionsTests(unittest.TestCase):
     def test_period_is_read_from_the_file_name(self):
         self.assertEqual(base.periode_de("hebdo_20260907_20260913.json"), (date(2026, 9, 7), date(2026, 9, 13)))
 
+    def test_known_buyer_identifier_wins_over_a_new_spelling_of_the_name(self):
+        connus = {"OP-81577": 1}
+        organismes = {"Municipalité D'Amherst": 1, "Ville de Montréal": 2}
+        # Cas réel : l'export de septembre écrit « d'Amherst », le contexte « D'Amherst ».
+        self.assertEqual(base.organisme_de("OP-81577", "Municipalité d'Amherst", connus, organismes), 1)
+        # Un identifiant inconnu est rattaché par le nom.
+        self.assertEqual(base.organisme_de("OP-99", "Ville de Montréal", connus, organismes), 2)
+        # Un nom absent du contexte, ou qui désigne un autre organisme, arrête tout.
+        with self.assertRaises(ValueError):
+            base.organisme_de("OP-99", "Municipalité inconnue", connus, organismes)
+        with self.assertRaises(ValueError):
+            base.organisme_de("OP-81577", "Ville de Montréal", connus, organismes)
+
     def test_organism_type_follows_the_code(self):
         self.assertEqual(base.type_organisme("92030"), "municipalité")
         self.assertEqual(base.type_organisme("AR930"), "MRC ou communauté")
@@ -124,6 +137,28 @@ class FicheTests(unittest.TestCase):
         fiche = copy.deepcopy(MATAGAMI)
         del fiche["awards"][0]["value"]["amount"]
         self.assertIsNone(base.lignes_de_la_fiche(fiche, "test.json")["attributions"][0]["montant"])
+
+
+class DemarchesTests(unittest.TestCase):
+    """Une ligne de demarches.csv, classée à la main, devient une ligne de table."""
+
+    def test_demarche_line_is_converted_and_its_organism_must_exist(self):
+        ligne = {"organisme": "Ville de Nicolet", "plan": "PGA-Eau", "classement": "élaboration",
+                 "etat": "mandat attribué", "date_attribution": "2026-07-28", "date_publication": "2026-08-05",
+                 "montant": "77061.99", "fournisseur": "LES SERVICES EXP INC.", "ocid": "ocds-ec9k95-20163303",
+                 "lien": "", "source": "SEAO", "notes": ""}
+        rangee = base.ligne_de_demarche(ligne, {"Ville de Nicolet": 7})
+        self.assertEqual(rangee["organisme_id"], 7)
+        self.assertEqual(rangee["date_attribution"], date(2026, 7, 28))
+        self.assertEqual(rangee["montant"], Decimal("77061.99"))
+        self.assertIsNone(rangee["lien"])
+        # Un appel d'offres en cours n'a ni date d'attribution ni montant : ils restent vides, pas à zéro.
+        en_cours = base.ligne_de_demarche({**ligne, "date_attribution": "", "montant": ""}, {"Ville de Nicolet": 7})
+        self.assertIsNone(en_cours["date_attribution"])
+        self.assertIsNone(en_cours["montant"])
+        # Un organisme absent du contexte arrête tout.
+        with self.assertRaises(ValueError):
+            base.ligne_de_demarche(ligne, {})
 
 
 if __name__ == "__main__":

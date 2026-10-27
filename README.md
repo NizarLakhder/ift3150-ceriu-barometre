@@ -40,7 +40,7 @@ cumuler plusieurs exports sans compter deux fois le même dossier.
 - **Une base de données cumule les exports sans double compte.** Un même dossier peut revenir d'un
   export à l'autre, avec un montant différent : la base garde chaque version, mais ne compte que la
   dernière.
-- **Tout est reproductible** : trois programmes Python, 65 tests, et les mêmes fichiers donnent
+- **Tout est reproductible** : trois programmes Python, 67 tests, et les mêmes fichiers donnent
   toujours les mêmes chiffres.
 
 ## Ce qui a été fait
@@ -378,9 +378,10 @@ sans tenir compte des accents.
 | `schema.sql` | la structure de la base, en quatre groupes de tables |
 | `contexte_municipalites.csv` | le contexte de chaque organisme : les programmes y ajoutent des lignes et remplissent les cases « À compléter », mais **n'écrasent jamais une valeur** |
 | `regroupements.csv` | les municipalités regroupées depuis 2025, avec leurs sources officielles |
+| `demarches.csv` | les démarches repérées, une ligne par dossier, classées à la main (élaboration, étape, démarche voisine ou outil) avec leur source |
 | `test_analyser_seao.py` | 17 tests de l'analyse, sur de petits cas construits, sans lire le vrai export |
 | `test_completer_contexte.py` | 35 tests du contexte, inspirés de vrais homonymes et de vraies fautes d'écriture |
-| `test_charger_base.py` | 9 tests de la conversion des fiches, sans base de données |
+| `test_charger_base.py` | 11 tests de la conversion des fiches, sans base de données |
 | `test_utilitaires.py` | 4 tests des petites fonctions partagées |
 | `requirements.txt` | les bibliothèques à installer |
 | `docs/` | les pages du site de suivi |
@@ -416,14 +417,15 @@ python completer_contexte.py
 # Ranger le tout dans la base PostgreSQL (voir plus bas pour la préparer).
 python charger_base.py
 
-# Lancer les 65 tests.
+# Lancer les 67 tests.
 python -B -m unittest -v
 ```
 
 Après avoir complété le contexte, relancez l'analyse pour que les tableaux de `sorties/` en
 tiennent compte.
 
-Les tableaux produits sont écrits dans `sorties/`. Tout ce qui s'y trouve est remplacé à chaque
+Les tableaux produits sont écrits dans `sorties/`, dans un dossier par export, par exemple
+`sorties/mensuel_20260801_20260831/`. Tout ce qui s'y trouve est remplacé à chaque
 exécution : n'y saisissez rien. Le seul fichier à remplir à la main est `contexte_municipalites.csv`.
 Pour régler un cas à la main, il suffit d'y écrire le code géographique de l'organisme : le
 programme remplit le reste à la prochaine exécution.

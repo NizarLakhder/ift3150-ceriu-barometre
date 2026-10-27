@@ -15,10 +15,13 @@ Ce que le programme charge, dans l'ordre :
      contexte_municipalites.csv;
   3. chaque export de donnees_seao/ qui n'a pas encore été chargé : seulement
      les fiches municipales, comme analyser_seao.py;
-  4. le classement de chaque fiche (nature, lié à l'eau, PGA-Eau), calculé
-     avec les règles mêmes d'analyser_seao.py.
+  4. le classement de chaque fiche (nature, lié à l'eau, PGA-Eau, gestion des
+     actifs en eau), calculé avec les règles mêmes d'analyser_seao.py;
+  5. les démarches, classées à la main dans demarches.csv.
 Il termine par des vérifications : la base doit redonner les chiffres des
-CSV produits par analyser_seao.py.
+CSV produits par analyser_seao.py. Il signale aussi les dossiers repérés par
+la règle PGA-Eau ou par le repérage large de la gestion des actifs en eau
+qui ne sont pas encore classés dans demarches.csv.
 
 Ce que le programme s'interdit :
   - charger deux fois un export : son empreinte est notée, et un fichier
@@ -56,6 +59,7 @@ from utilitaires import clean_org_name, clean_text, date_from_release_id, valid_
 
 SCHEMA_SQL = Path("schema.sql")
 REGROUPEMENTS_CSV = Path("regroupements.csv")
+DEMARCHES_CSV = Path("demarches.csv")
 A_COMPLETER = "À compléter"
 
 
@@ -405,6 +409,32 @@ def charger_organismes(connexion):
     return len(contexte), len(acheteurs)
 
 
+def organisme_de(identifiant, nom, connus, organismes):
+    """Trouve l'organisme d'un identifiant d'acheteur publié dans une fiche.
+
+    connus relie les identifiants déjà en base à leur organisme, organismes
+    relie les noms du fichier de contexte au leur.
+
+    Un identifiant déjà connu fait foi, même quand l'organisme écrit son nom
+    autrement : « Municipalité D'Amherst » devient « Municipalité d'Amherst »
+    dans l'export de septembre. Un identifiant inconnu est rattaché par le nom :
+    le contexte ne connaît pas toujours tous les identifiants d'un organisme,
+    puisque ceux d'une ligne existante n'y sont jamais mis à jour (Montréal en a
+    36 dans l'export d'août, le contexte seulement les 31 de la semaine du
+    7 septembre). Deux cas arrêtent tout : un nom absent du contexte, et un nom
+    qui désigne un autre organisme que l'identifiant.
+    """
+    par_nom = organismes.get(nom)
+    if identifiant in connus:
+        if par_nom is not None and par_nom != connus[identifiant]:
+            raise ValueError(f"L'identifiant {identifiant} est rattaché à un autre organisme que « {nom} ».")
+        return connus[identifiant]
+    if par_nom is None:
+        raise ValueError(f"{nom} ({identifiant}) n'est pas dans contexte_municipalites.csv : "
+                         "lancer d'abord analyser_seao.py sur cet export.")
+    return par_nom
+
+
 def charger_export(connexion, chemin):
     """Charge les fiches municipales d'un export, d'un seul bloc.
 
@@ -446,26 +476,16 @@ def charger_export(connexion, chemin):
     inserer(connexion, "seao.classification",
             list({c["code"]: {"code": c["code"], "libelle": c["libelle"]} for c in toutes("classifications")}.values()))
 
-    # Les acheteurs. Le contexte ne connaît pas toujours tous les identifiants
-    # d'un organisme : Montréal en a 36 dans l'export d'août, mais le contexte,
-    # où les identifiants d'une ligne existante ne sont jamais mis à jour, ne
-    # connaît que les 31 de la semaine du 7 septembre. Un identifiant inconnu
-    # est donc rattaché par le nom de l'organisme, comme le fait
-    # analyser_seao.py. Un organisme absent du contexte arrête tout.
+    # Les acheteurs : chaque identifiant publié est rattaché à son organisme (voir organisme_de).
     organismes = dict(connexion.execute("SELECT nom, organisme_id FROM organismes.organisme").fetchall())
     connus = dict(connexion.execute("SELECT acheteur_id, organisme_id FROM organismes.acheteur").fetchall())
     acheteurs = {n["acheteur"]["acheteur_id"]: n["acheteur"] for n in nouvelles}
-    for identifiant, acheteur in acheteurs.items():
-        if acheteur["organisme"] not in organismes:
-            raise ValueError(f"{acheteur['organisme']} ({identifiant}) n'est pas dans contexte_municipalites.csv : "
-                             "lancer d'abord analyser_seao.py sur cet export.")
-        if identifiant in connus and connus[identifiant] != organismes[acheteur["organisme"]]:
-            raise ValueError(f"L'identifiant {identifiant} est rattaché à un autre organisme que « {acheteur['organisme']} ».")
+    rattaches = {i: organisme_de(i, a["organisme"], connus, organismes) for i, a in acheteurs.items()}
     with connexion.cursor() as curseur:
         curseur.executemany(
             "INSERT INTO organismes.acheteur (acheteur_id, organisme_id, nom_seao) VALUES (%s, %s, %s) "
             "ON CONFLICT (acheteur_id) DO UPDATE SET nom_seao = EXCLUDED.nom_seao",
-            [(i, organismes[a["organisme"]], a["nom_seao"]) for i, a in acheteurs.items()])
+            [(i, rattaches[i], a["nom_seao"]) for i, a in acheteurs.items()])
 
     inserer(connexion, "seao.fiche", [n["fiche"] for n in nouvelles])
     inserer(connexion, "seao.fiche_tag", toutes("tags"))
@@ -499,9 +519,50 @@ def classer_fiches(connexion):
         ligne = analyser_seao.analyse_release(brut)
         lignes.append({"ocid": ocid, "release_id": release_id, "nature_transaction": ligne["nature_transaction"],
                        "lie_eau": ligne["lie_eau"] == "oui", "pga_eau": ligne["pga_eau"] == "oui",
+                       "gestion_actifs_eau": texte(ligne["gestion_actifs_eau"]),
                        "version_regles": version, "calcule_le": datetime.now(timezone.utc)})
     inserer(connexion, "analyses.fiche_classee", lignes, "DO UPDATE", ["ocid", "release_id"])
     return len(lignes)
+
+
+def ligne_de_demarche(ligne, organismes):
+    """Convertit une ligne de demarches.csv en ligne de la table analyses.demarche.
+
+    organismes relie les noms du fichier de contexte à leur numéro. Un
+    organisme inconnu arrête tout, comme dans charger_export. Les valeurs
+    permises pour le classement et l'état sont vérifiées par la base.
+    """
+    if ligne["organisme"] not in organismes:
+        raise ValueError(f"demarches.csv : « {ligne['organisme']} » n'est pas dans contexte_municipalites.csv.")
+    attribution, publication = texte(ligne["date_attribution"]), texte(ligne["date_publication"])
+    return {
+        "organisme_id": organismes[ligne["organisme"]], "plan": ligne["plan"], "classement": ligne["classement"],
+        "etat": ligne["etat"],
+        "date_attribution": date.fromisoformat(attribution) if attribution else None,
+        "date_publication": date.fromisoformat(publication) if publication else None,
+        "montant": nombre(ligne["montant"]),
+        "fournisseur": texte(ligne["fournisseur"]), "ocid": texte(ligne["ocid"]), "lien": texte(ligne["lien"]),
+        "source": ligne["source"], "notes": texte(ligne["notes"]),
+    }
+
+
+def charger_demarches(connexion):
+    """Recharge demarches.csv tel quel : le fichier, tenu à la main, fait foi."""
+    with DEMARCHES_CSV.open(encoding="utf-8-sig", newline="") as fichier:
+        demarches = list(csv.DictReader(fichier))
+    noter_fichier_reference(connexion, DEMARCHES_CSV, "Démarches repérées, classées à la main avec leur source")
+    organismes = dict(connexion.execute("SELECT nom, organisme_id FROM organismes.organisme").fetchall())
+    connexion.execute("DELETE FROM analyses.demarche")
+    inserer(connexion, "analyses.demarche", [ligne_de_demarche(d, organismes) for d in demarches])
+    return len(demarches)
+
+
+def dossiers_a_classer(connexion):
+    """Les dossiers repérés par la règle PGA-Eau ou par le repérage large de la gestion des actifs en eau,
+    mais qui n'ont pas encore de ligne dans demarches.csv."""
+    return [ocid for (ocid,) in connexion.execute(
+        "SELECT DISTINCT c.ocid FROM analyses.fiche_classee c WHERE (c.pga_eau OR c.gestion_actifs_eau IS NOT NULL) "
+        "AND NOT EXISTS (SELECT 1 FROM analyses.demarche d WHERE d.ocid = c.ocid) ORDER BY c.ocid")]
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +573,8 @@ def verifier(connexion):
     """Compare la base aux CSV d'analyser_seao.py, export par export.
 
     Pour chaque export : même nombre de fiches municipales, même somme des
-    montants attribués, mêmes dossiers PGA-Eau. Retourne la liste des écarts;
+    montants attribués, mêmes dossiers PGA-Eau, même repérage de la gestion
+    des actifs en eau. Retourne la liste des écarts;
     elle doit être vide.
     """
     ecarts = []
@@ -535,14 +597,25 @@ def verifier(connexion):
         pga_csv = {(d["ocid"], d["release_id"]) for d in details if d["pga_eau"] == "oui"}
         pga_base = {(o, r) for o, r in connexion.execute(
             "SELECT ocid, release_id FROM analyses.fiche_classee WHERE pga_eau").fetchall()} & cles
+        gestion_csv = {(d["ocid"], d["release_id"], d["gestion_actifs_eau"]) for d in details if d["gestion_actifs_eau"]}
+        gestion_base = {(o, r, g) for o, r, g in connexion.execute(
+            "SELECT ocid, release_id, gestion_actifs_eau FROM analyses.fiche_classee "
+            "WHERE gestion_actifs_eau IS NOT NULL").fetchall() if (o, r) in cles}
         print(f"  {nom} : {len(en_base)} fiches sur {len(details)} | montants attribués {somme_base:,.2f} $ "
-              f"contre {somme_csv:,.2f} $ dans le CSV | PGA-Eau {len(pga_base)} sur {len(pga_csv)}")
+              f"contre {somme_csv:,.2f} $ dans le CSV | PGA-Eau {len(pga_base)} sur {len(pga_csv)} | "
+              f"gestion des actifs en eau {len(gestion_base)} sur {len(gestion_csv)}")
+        if gestion_base != gestion_csv:
+            ecarts.append(f"{nom} : repérage de la gestion des actifs en eau différent")
         if len(en_base) != len(details) or nb_municipales != len(details):
             ecarts.append(f"{nom} : nombre de fiches différent")
         if abs(somme_base - somme_csv) > Decimal("0.01"):
             ecarts.append(f"{nom} : somme des montants différente")
         if pga_base != pga_csv:
             ecarts.append(f"{nom} : dossiers PGA-Eau différents")
+    # Une démarche tirée du SEAO doit renvoyer à un dossier présent dans la base.
+    for (ocid,) in connexion.execute("SELECT ocid FROM analyses.demarche WHERE ocid IS NOT NULL "
+                                     "AND ocid NOT IN (SELECT ocid FROM seao.fiche)"):
+        ecarts.append(f"demarches.csv : le dossier {ocid} est absent de la base")
     return ecarts
 
 
@@ -583,11 +656,15 @@ def main():
             print(f"  {chemin.name} : " + ("déjà chargé" if ajoutees is None else f"{ajoutees} fiches ajoutées"))
 
         print(f"Classement : {classer_fiches(connexion)} fiches ({version_des_regles()})")
+        print(f"Démarches : {charger_demarches(connexion)} dossiers classés à la main")
         connexion.commit()
 
         print("\nVérifications :")
         ecarts = verifier(connexion)
         print("  Aucun écart avec les CSV." if not ecarts else "  ÉCARTS : " + "; ".join(ecarts))
+        a_classer = dossiers_a_classer(connexion)
+        print(f"  Dossiers liés à la gestion des actifs en eau, à classer dans demarches.csv : {len(a_classer)}"
+              + (" (" + ", ".join(a_classer) + ")" if a_classer else ""))
 
         print("\nContenu de la base :")
         for table in ("territoire.municipalite", "territoire.mrc", "territoire.indicateur_eau", "organismes.organisme",

@@ -290,10 +290,38 @@ CREATE TABLE IF NOT EXISTS analyses.fiche_classee (
     nature_transaction  text NOT NULL,         -- achat, subvention ou contribution, vente d'immeuble, partenariat
     lie_eau             boolean NOT NULL,
     pga_eau             boolean NOT NULL,
+    gestion_actifs_eau  text,                  -- la famille du repérage large, vide si rien ne touche aux actifs en eau
     version_regles      text NOT NULL,
     calcule_le          timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (ocid, release_id),
     FOREIGN KEY (ocid, release_id) REFERENCES seao.fiche ON DELETE CASCADE
+);
+-- Pour une base créée avant le repérage large.
+ALTER TABLE analyses.fiche_classee ADD COLUMN IF NOT EXISTS gestion_actifs_eau text;
+
+-- Les démarches repérées, une ligne par dossier, tenues à la main dans
+-- demarches.csv et rechargées telles quelles à chaque exécution. Un dossier du
+-- SEAO n'est qu'une trace : Windsor a deux dossiers pour un seul PGA-Eau, et
+-- Sherbrooke ne se voit que par des inspections faites « dans le cadre du
+-- PGA-EAU ». D'autres sources, comme le site web d'une municipalité, pourront
+-- s'ajouter sans numéro de dossier : d'où les états « plan adopté » et « plan
+-- publié », qui ne viennent pas du SEAO.
+CREATE TABLE IF NOT EXISTS analyses.demarche (
+    demarche_id       integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    organisme_id      integer NOT NULL REFERENCES organismes.organisme,
+    plan              text NOT NULL,                 -- « PGA-Eau » pour l'instant : la gestion des actifs en eau
+    classement        text NOT NULL CHECK (classement IN ('élaboration', 'étape', 'plan d''intervention',
+                                                          'plan de gestion des actifs', 'démarche voisine', 'outil')),
+    etat              text NOT NULL CHECK (etat IN ('mandat attribué', 'appel d''offres en cours',
+                                                    'appel d''offres annulé', 'plan adopté', 'plan publié')),
+    date_attribution  date,
+    date_publication  date,
+    montant           numeric(14, 2),
+    fournisseur       text,
+    ocid              text UNIQUE,                   -- vide pour une source autre que le SEAO
+    lien              text,
+    source            text NOT NULL,
+    notes             text
 );
 
 -- La fiche la plus récente de chaque dossier. Le numéro de fiche est un
@@ -325,10 +353,32 @@ SELECT f.ocid, f.release_id, f.fichier_source, f.date_deduite_numero, f.titre, f
        coalesce(m.nom, mr.nom) AS territoire,
        coalesce(m.population, mr.population) AS population,
        coalesce(m.region_code, mr.region_code) AS region_code,
-       c.nature_transaction, c.lie_eau, c.pga_eau, f.url_avis
+       c.nature_transaction, c.lie_eau, c.pga_eau, f.url_avis, c.gestion_actifs_eau
 FROM seao.fiche f
 JOIN organismes.acheteur a USING (acheteur_id)
 JOIN organismes.organisme o USING (organisme_id)
 LEFT JOIN territoire.municipalite m ON m.code_geographique = o.code_geographique
 LEFT JOIN territoire.mrc mr ON mr.code = o.mrc_code
 LEFT JOIN analyses.fiche_classee c USING (ocid, release_id);
+
+-- L'état du PGA-Eau de chaque municipalité du répertoire, d'après les
+-- démarches classées à la main. Trois niveaux : un PGA-Eau repéré (son
+-- élaboration ou une de ses étapes), une démarche liée repérée (un plan
+-- d'intervention des réseaux d'eau, un plan de gestion des actifs, une
+-- démarche voisine ou un outil), ou aucune trace. Sans démarche connue,
+-- l'état est « aucune trace dans les exports chargés », jamais « pas de plan » :
+-- une partie des mandats ne passe pas par le SEAO.
+DROP VIEW IF EXISTS analyses.etat_pga_eau;
+CREATE VIEW analyses.etat_pga_eau AS
+SELECT m.code_geographique, m.nom, m.designation, m.population, m.region_code, m.mrc_code,
+       count(d.demarche_id) FILTER (WHERE d.classement IN ('élaboration', 'étape')) AS nb_dossiers_pga_eau,
+       count(d.demarche_id) FILTER (WHERE d.classement NOT IN ('élaboration', 'étape')) AS nb_dossiers_lies,
+       max(coalesce(d.date_attribution, d.date_publication)) AS derniere_date,
+       CASE WHEN count(d.demarche_id) FILTER (WHERE d.classement IN ('élaboration', 'étape')) > 0
+                THEN 'PGA-Eau repéré dans le SEAO'
+            WHEN count(d.demarche_id) > 0 THEN 'démarche liée repérée dans le SEAO'
+            ELSE 'aucune trace dans les exports chargés' END AS etat
+FROM territoire.municipalite m
+LEFT JOIN organismes.organisme o ON o.code_geographique = m.code_geographique
+LEFT JOIN analyses.demarche d ON d.organisme_id = o.organisme_id AND d.plan = 'PGA-Eau'
+GROUP BY m.code_geographique, m.nom, m.designation, m.population, m.region_code, m.mrc_code;
