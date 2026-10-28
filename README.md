@@ -14,12 +14,15 @@ Site de suivi : <https://nizarlakhder.github.io/ift3150-ceriu-barometre/>
 Ce document résume ce qui a été fait à ce jour, ce que les données montrent, les questions qui
 restent ouvertes, puis la façon de relancer le travail.
 
-**État au 14 octobre 2026.** Deux exports du SEAO ont été analysés : la semaine du 7 au
-13 septembre 2026, qui sert de référence, et le mois d'août 2026. Depuis la première mise en commun
-du 2 octobre, trois chantiers ont avancé. Le contexte municipal est maintenant complet pour toutes
-les municipalités et MRC rencontrées. Un petit modèle de langage a été mis à l'essai pour lire les
-fiches à notre place. Enfin, les données sont rangées dans une base PostgreSQL, qui permet de
-cumuler plusieurs exports sans compter deux fois le même dossier.
+**État au 28 octobre 2026.** Sept exports du SEAO ont été analysés : les mois de mai, août et
+septembre 2026, et quatre semaines de septembre et d'octobre, soit 28 611 fiches municipales
+distinctes. Les deux premiers étudiés, la semaine du 7 au 13 septembre 2026, qui sert de référence,
+et le mois d'août 2026, sont décrits en détail plus bas. Depuis la première mise en commun du
+2 octobre, le contexte municipal est complet pour toutes les municipalités et MRC rencontrées, un
+petit modèle de langage a été mis à l'essai pour lire les fiches, et les données sont rangées dans
+une base PostgreSQL, qui cumule les exports sans compter deux fois le même dossier. La règle
+PGA-Eau a été validée sur les sept exports, et un repérage plus large de la gestion des actifs en
+eau l'accompagne. Les 33 dossiers repérés sont classés à la main dans une table des démarches.
 
 ## En bref
 
@@ -29,18 +32,20 @@ cumuler plusieurs exports sans compter deux fois le même dossier.
 - **Reconnaître une démarche est plus difficile qu'extraire les données.** L'export d'août contient
   quatre dossiers PGA-Eau ; chercher le mot « PGA-Eau » en trouve deux, et le filtre large « lié à
   l'eau » les trouve tous, mais parmi 749 fiches. La semaine de septembre en ajoute un cinquième, à
-  Matagami.
+  Matagami. Sur les sept exports, la règle du programme repère 15 dossiers, et un repérage plus
+  large en ajoute 18, comme des plans d'intervention des réseaux d'eau : aucun n'est hors sujet.
 - **Peu de petits contrats sont publiés.** Seulement 8,5 % des contrats d'achat chiffrés de la
   semaine, et 7,9 % de ceux d'août, sont sous 25 000 \$. Il y en a plus de trois fois plus juste
   au-dessus du seuil que juste en dessous : un petit mandat peut passer inaperçu.
 - **Le contexte municipal se rattache même quand le SEAO écrit mal un nom.** « St » pour Saint, un
   « de » oublié, une faute de frappe comme « Rougement » pour Rougemont : le programme les rattrape,
-  mais il n'accepte un nom seulement approché que si un indice publié le confirme. 640 des 715
-  organismes rencontrés ont maintenant leur population ; les 75 autres ne sont pas des municipalités.
+  mais il n'accepte un nom seulement approché que si un indice publié le confirme. 934 des 1 042
+  organismes rencontrés ont maintenant leur population ; les 108 autres ne sont pas des
+  municipalités.
 - **Une base de données cumule les exports sans double compte.** Un même dossier peut revenir d'un
   export à l'autre, avec un montant différent : la base garde chaque version, mais ne compte que la
   dernière.
-- **Tout est reproductible** : trois programmes Python, 67 tests, et les mêmes fichiers donnent
+- **Tout est reproductible** : trois programmes Python, 69 tests, et les mêmes fichiers donnent
   toujours les mêmes chiffres.
 
 ## Ce qui a été fait
@@ -60,7 +65,7 @@ cumuler plusieurs exports sans compter deux fois le même dossier.
    (colonne `lie_eau`) et, avec une règle plus précise, les dossiers PGA-Eau (colonne `pga_eau`).
 5. **Documenter la qualité des données**, pour savoir ce qu'il faut relire avant de compter.
 6. **Cumuler les exports dans une base PostgreSQL.** `charger_base.py` range les fiches, le
-   répertoire et le contexte dans une base de 19 tables, puis vérifie qu'elle redonne exactement les
+   répertoire et le contexte dans une base de 20 tables, puis vérifie qu'elle redonne exactement les
    chiffres que donne `analyser_seao.py`.
 7. **Mettre un modèle de langage à l'essai.** Un petit modèle, qwen2.5, a été installé avec Ollama
    sur un ordinateur personnel pour lire les fiches à la place d'une lecture à la main. Les
@@ -125,6 +130,18 @@ dossiers lus à la main, Matagami compris, et aucun autre. Cinq cas restent trop
 la règle est à valider sur d'autres périodes. Surtout, ces cinq dossiers ont eux-mêmes été repérés
 par leur titre. La règle ne dit donc rien des mandats de gestion d'actifs dont le titre ne mentionne
 ni PGA ni gestion d'actifs, et qui pourraient être nombreux : c'est la prochaine chose à mesurer.
+
+**Sur les sept exports.** La règle a été relancée sur les cinq exports suivants. Elle repère
+15 dossiers, tous lus un par un : 11 portent sur l'élaboration d'un PGA-Eau, 2 sur des inspections
+faites à Sherbrooke « dans le cadre du PGA-EAU », et les 2 autres touchent aussi à la gestion des
+actifs en eau. Elle rate en revanche les démarches liées dont le titre ne dit pas « PGA-Eau ». Un
+second repérage, plus large, les cherche dans le titre et la description de l'avis (colonne
+`gestion_actifs_eau`). Il en trouve 18 de plus : 8 plans d'intervention des réseaux d'eau, un plan
+de gestion de tous les actifs à Clermont, 3 démarches voisines et 6 logiciels de gestion d'actifs.
+Les plans routiers, les bâtiments et les véhicules sont écartés pour l'instant. Les 33 dossiers
+sont classés à la main dans `demarches.csv`, et la base en tire l'état de chaque municipalité :
+10 ont un PGA-Eau repéré dans le SEAO, 16 une démarche liée, et 1 255 aucune trace dans les exports
+chargés, ce qui ne veut pas dire qu'elles n'ont pas de plan.
 
 **Sur les prix.** Les montants vont de 4 892 \$ (Matagami, un « renforcement stratégique » confié à
 l'UMQ, semaine de septembre) à 77 062 \$ (Nicolet, un « accompagnement à la préparation » du plan).
@@ -207,13 +224,14 @@ distinctive écrite dans le nom (Canton, Village, Ville, Paroisse). Le mot « Mu
 pas : le SEAO l'emploie aussi pour des paroisses, comme Sainte-Françoise. 23 homonymes ont été
 départagés ainsi. Sans indice, le programme refuse de choisir.
 
-**Neuf cas ont été réglés à la main**, chacun avec sa source publique, notée dans le fichier de
-contexte. Pour ces cas, les fiches du SEAO ne donnent pas l'adresse de l'acheteur. On la trouve en
-revanche sur le site fédéral AchatsCanada, qui republie les avis du SEAO : c'est ainsi que
-« Municipalité de Saint-Donat » a été rattachée à la municipalité de Lanaudière plutôt qu'à celle du
-Bas-Saint-Laurent.
-Trois des organismes cherchés n'existent plus sous leur nom : Saint-Bruno, Sainte-Anne-de-la-Pocatière
-et Saint-Onésime-d'Ixworth ont été regroupées en 2025 et en 2026 avec des voisines. Elles sont
+**Dix-huit cas ont été réglés à la main**, chacun avec sa source publique, notée dans le fichier de
+contexte. On cherche d'abord l'adresse de l'acheteur dans les fiches du SEAO, quand elles la
+donnent. Sinon, on la trouve sur le site fédéral AchatsCanada, qui republie les avis du SEAO : c'est
+ainsi que « Municipalité de Saint-Donat » a été rattachée à la municipalité de Lanaudière plutôt
+qu'à celle du Bas-Saint-Laurent. La page de l'avis sur le SEAO ne sert qu'en dernier recours.
+Quatre des organismes cherchés n'existent plus sous leur nom : Saint-Bruno, Hébertville-Station,
+Sainte-Anne-de-la-Pocatière et Saint-Onésime-d'Ixworth ont été regroupées en 2025 et en 2026 avec
+des voisines. Elles sont
 rattachées à la nouvelle municipalité, et le fichier `regroupements.csv` garde la trace de chaque
 regroupement, avec sa source officielle.
 
@@ -222,8 +240,8 @@ pas des municipalités. Le répertoire en connaît 23, des régies et des socié
 sans leur donner de population. Les 18 autres n'y figurent pas, comme les offices d'habitation ou la
 Société du Parc Jean-Drapeau.
 
-**Ce que disent les cases sans chiffre.** Le fichier `contexte_municipalites.csv` compte 715 lignes,
-une par organisme rencontré dans les deux exports. Chaque nouvel export y ajoute ceux qu'il fait
+**Ce que disent les cases sans chiffre.** Le fichier `contexte_municipalites.csv` compte 1 042 lignes,
+une par organisme rencontré dans les sept exports. Chaque nouvel export y ajoute ceux qu'il fait
 apparaître, sans jamais modifier une ligne existante. Une case sans chiffre y dit pourquoi :
 
 | Mot | Sens |
@@ -378,8 +396,8 @@ sans tenir compte des accents.
 | `schema.sql` | la structure de la base, en quatre groupes de tables |
 | `contexte_municipalites.csv` | le contexte de chaque organisme : les programmes y ajoutent des lignes et remplissent les cases « À compléter », mais **n'écrasent jamais une valeur** |
 | `regroupements.csv` | les municipalités regroupées depuis 2025, avec leurs sources officielles |
-| `demarches.csv` | les démarches repérées, une ligne par dossier, classées à la main (élaboration, étape, démarche voisine ou outil) avec leur source |
-| `test_analyser_seao.py` | 17 tests de l'analyse, sur de petits cas construits, sans lire le vrai export |
+| `demarches.csv` | les démarches de gestion des actifs en eau, une ligne par dossier, toutes classées à la main (élaboration, étape, plan d'intervention, plan de gestion des actifs, démarche voisine ou outil), avec la source de l'information |
+| `test_analyser_seao.py` | 19 tests de l'analyse, sur de petits cas construits, sans lire le vrai export |
 | `test_completer_contexte.py` | 35 tests du contexte, inspirés de vrais homonymes et de vraies fautes d'écriture |
 | `test_charger_base.py` | 11 tests de la conversion des fiches, sans base de données |
 | `test_utilitaires.py` | 4 tests des petites fonctions partagées |
@@ -417,7 +435,7 @@ python completer_contexte.py
 # Ranger le tout dans la base PostgreSQL (voir plus bas pour la préparer).
 python charger_base.py
 
-# Lancer les 67 tests.
+# Lancer les 69 tests.
 python -B -m unittest -v
 ```
 
@@ -505,8 +523,8 @@ Les mêmes fichiers donnent toujours les mêmes résultats, et la date de chaque
 inscrite dans le contexte. Le fichier `regroupements.csv`, lui, est tenu à la main : chaque ligne y
 cite l'annonce ou l'avis officiel du regroupement.
 
-Les neuf cas réglés à la main s'appuient sur d'autres sources publiques : les avis du SEAO
-republiés sur le site fédéral AchatsCanada, qui donnent l'adresse de l'acheteur, les annonces de
+Les dix-huit cas réglés à la main s'appuient sur d'autres sources publiques : les pages d'avis du
+SEAO, les avis republiés sur le site fédéral AchatsCanada, qui donnent l'adresse de l'acheteur, les annonces de
 regroupement du gouvernement du Québec et un avis du ministère de la Justice. Chacune est citée, avec
 son lien, dans la page [Références](docs/references.md) du site et dans la colonne `notes` du
 fichier de contexte.

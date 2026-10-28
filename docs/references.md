@@ -22,8 +22,9 @@ Québec, licence Creative Commons avec attribution.
 <https://www.donneesquebec.ca/recherche/dataset/systeme-electronique-dappel-doffres-seao>
 
 Source principale du projet. Les exports hebdomadaires et mensuels au format JSON fournissent les
-avis, attributions et contrats des organismes publics, dont les acheteurs municipaux. Deux exports
-ont été analysés en entier : la semaine du 7 au 13 septembre 2026 et le mois d'août 2026.
+avis, attributions et contrats des organismes publics, dont les acheteurs municipaux. Sept exports
+ont été analysés en entier : les mois de mai, août et septembre 2026, la semaine du 7 au
+13 septembre 2026 et les trois semaines du 28 septembre au 18 octobre 2026.
 
 **Ministère des Affaires municipales et de l'Habitation.** *Répertoire des municipalités du Québec*.
 Données Québec, licence Creative Commons avec attribution.
@@ -49,21 +50,22 @@ disparu (« 3005 » pour Gaspé) : les programmes le rétablissent.
 
 ### Sources consultées pour les cas tranchés à la main
 
-Neuf organismes ne pouvaient pas être rattachés par leur seul nom, et sept rattachements obtenus par
+Dix-huit organismes ne pouvaient pas être rattachés par leur seul nom, et sept rattachements obtenus par
 les règles tolérantes demandaient une vérification. Chaque cas a été tranché ou vérifié avec une
 source publique, citée cas par cas dans la colonne `notes` de `contexte_municipalites.csv`.
 
 **Secrétariat du Conseil du trésor.** *Système électronique d'appel d'offres (SEAO)*, pages d'avis
 consultées une à une. <https://seao.gouv.qc.ca/>
 
-Elles donnent l'adresse prévue pour la réception des soumissions et la région de livraison. Dix pages
+Elles donnent l'adresse prévue pour la réception des soumissions et la région de livraison. Onze pages
 ont été consultées.
 
 **Gouvernement du Canada.** *AchatsCanada*, avis republiés depuis le SEAO.
 <https://canadabuys.canada.ca/>
 
 Le site fédéral republie les avis du SEAO sous le même numéro, précédé de « qc », et donne l'adresse
-de l'acheteur. C'est ce qui a permis de distinguer les deux Saint-Donat du Québec.
+de l'acheteur. C'est ce qui a permis de distinguer les deux Saint-Donat du Québec, et de reconnaître
+Saint-Simon-de-Rimouski, écrit « Saint-Simon-de-Rimsouki » dans le SEAO.
 
 **Gouvernement du Québec.** Annonces officielles des trois regroupements municipaux récents,
 consignés avec leur source dans `regroupements.csv` :

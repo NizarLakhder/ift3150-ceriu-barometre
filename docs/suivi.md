@@ -343,3 +343,123 @@ Trois demandes pour la suite :
   rattacher au territoire qu'ils desservent
 - Faire une première comparaison ajustée à la population à partir de la base
 </div>
+
+---
+
+## Semaine 8 (19 au 25 octobre) : cinq nouveaux exports et première table des démarches
+
+### Objectifs de la période
+- Vérifier que la règle PGA-Eau tient sur d'autres périodes du SEAO
+- Garder une trace des démarches elles-mêmes, et pas seulement des fiches
+
+### Travail réalisé
+
+!!! abstract "Avancement"
+    - [x] Cinq nouveaux exports du SEAO analysés : mai, septembre, et les trois semaines du
+          28 septembre au 18 octobre
+        - Avec les deux premiers, la base compte maintenant 28 611 fiches municipales, sans doublon
+        - Pour chaque export, elle redonne exactement les chiffres des tableaux d'`analyser_seao.py`
+    - [x] Le contexte passe de 715 à 1 042 organismes, sans toucher aux lignes existantes
+        - La plupart ont été rattachés automatiquement : 285
+        - 9 ont demandé une recherche à la main, chacun avec sa source
+        - Les 33 autres ne sont pas des municipalités, surtout des régies
+    - [x] La règle PGA-Eau tient sur les sept exports. Elle repère 15 dossiers, et à la lecture,
+          aucun n'est hors sujet
+        - 13 portent bien sur un PGA-Eau : son élaboration ou une de ses étapes
+        - Les 2 autres touchent quand même à la gestion des actifs en eau
+    - [x] En cherchant ce que la règle rate, on trouve des démarches proches dont le titre ne dit
+          pas « PGA-Eau » : des plans d'intervention sur les réseaux d'eau, un plan de gestion de
+          tous les actifs, des logiciels de gestion d'actifs
+    - [x] Un deuxième repérage, plus large, vient compléter la règle pour les attraper. Il lit le
+          titre et la description de l'avis, et laisse de côté les routes, les bâtiments et les
+          véhicules. Il trouve 18 dossiers de plus
+    - [x] Une première table des démarches, `demarches.csv`, tenue à la main : une ligne par
+          dossier, avec ce qu'on a décidé qu'il était, sa date, son montant, son fournisseur et son
+          lien
+        - La base s'en sert pour dire où en est chaque municipalité : PGA-Eau repéré, démarche liée
+          repérée, ou aucune trace
+    - [x] Un peu de ménage : les sorties sont rangées par export, et les tests regroupés par règle.
+          On passe de 96 à 65 tests sans perdre aucune vérification, puis à 69 avec les nouveaux
+
+### Décisions et ajustements
+
+!!! info "Décisions"
+    - Un dossier n'est pas une démarche. Windsor a lancé deux appels d'offres pour un seul PGA-Eau,
+      et on ne voit celui de Sherbrooke qu'à travers des inspections faites pour lui. La table des
+      démarches rassemble ces traces.
+    - Quand on ne trouve rien pour une municipalité, on écrit « aucune trace dans les exports
+      chargés », jamais « pas de plan » : une partie des mandats ne passe pas par le SEAO.
+    - On date une démarche par son attribution, pas par l'export où on l'a trouvée. Tous nos
+      exports sont de 2026, mais 17 des 28 mandats attribués l'ont été avant.
+    - Le programme propose, mais c'est la lecture qui tranche : chaque dossier repéré est classé à
+      la main.
+    - On s'en tient au PGA-Eau pour l'instant. Les bâtiments, les routes et les véhicules viendront
+      après.
+    - Pour un cas difficile, on regarde d'abord l'adresse dans les fiches, puis l'avis republié sur
+      AchatsCanada. La page du SEAO ne sert qu'en dernier recours.
+    - Quand on connaît déjà l'identifiant d'un acheteur, on s'y fie, même s'il écrit son nom
+      autrement.
+
+### Difficultés rencontrées
+
+!!! warning "Difficultés"
+    - Les parenthèses dans un nom ne contiennent pas toujours une région. On y trouve
+      « (Chicoutimi) », un morceau du nom officiel comme « (Rivière-du-Sud) », ou même le code de la
+      municipalité, « (80085) ». Dans le doute, le programme ne rattache pas, et on règle le cas à
+      la main.
+    - Trois acheteurs ont changé l'écriture de leur nom d'un export à l'autre, ce qui bloquait le
+      chargement de la base.
+    - Beaucoup d'inspections de conduites ne disent pas à quoi elles servent. On ne les retient que
+      si l'avis précise qu'elles se font « dans le cadre » d'un plan.
+    - Même l'apostrophe varie : droite dans certains titres, courbe dans d'autres. Sans en tenir
+      compte, la recherche ratait des « plan d'intervention ».
+
+### Prochaines étapes
+
+- Classer à la main les 18 nouveaux dossiers
+- Vérifier sur l'avis que le plan de Clermont couvre bien l'eau
+
+---
+
+## Semaine 9 (26 octobre au 1er novembre) : démarches classées
+
+### Objectifs de la période
+- Classer les nouveaux dossiers et mettre ce site à jour avant la rencontre du 28 octobre
+- Préparer la mise en commun de la semaine prochaine
+
+### Travail réalisé
+
+!!! abstract "Avancement"
+    - [x] Les 18 nouveaux dossiers lus et classés à la main
+        - 8 plans d'intervention sur les réseaux d'eau. Windsor en a un, en plus du PGA-Eau qu'il
+          prépare
+        - 1 plan de gestion de tous les actifs, à Clermont
+        - 3 démarches voisines, comme un plan du réseau pluvial contre les crues
+        - 6 logiciels de gestion d'actifs, qui servent à tous les actifs d'une ville, pas seulement
+          à l'eau
+    - [x] La table des démarches compte maintenant 33 dossiers. Voici ce qu'elle dit des 1 281
+          municipalités du répertoire :
+        - 10 ont un PGA-Eau repéré dans le SEAO
+        - 16 ont une démarche liée
+        - 1 255 n'ont aucune trace dans nos exports, ce qui ne veut pas dire qu'elles n'ont rien
+          fait
+
+### Prochaines étapes
+
+<div class="a-confirmer" markdown>
+
+*À confirmer à la rencontre du 28 octobre :*
+
+- Introduire l'agent Hermes demandé par le CERIU : relire ce que le programme repère et trancher
+  les cas ambigus
+- Préparer un premier prototype d'interface à partir de l'état de chaque municipalité
+- Décider quoi faire des 108 organismes qui ne sont pas des municipalités : surtout des régies
+  intermunicipales, des sociétés de transport et des offices d'habitation. Ils ne sont pas dans le
+  répertoire du ministère, donc ils n'apparaissent pas dans l'état par municipalité
+    - 18 de ces régies s'occupent de l'eau potable ou des eaux usées. Quand l'une d'elles prépare
+      un PGA-Eau, les municipalités qu'elle dessert restent « sans trace » dans nos résultats.
+      C'est le cas de la Régie d'aqueduc de Grand Pré, qui a attribué un mandat de PGA-Eau en
+      mai 2026
+    - Deux options : chercher quelles municipalités chaque régie dessert, ou montrer les régies à
+      part
+</div>

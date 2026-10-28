@@ -27,9 +27,11 @@ savoir si les données publiques permettent de combler ce manque.
 
 ### Ce que l'exploration des données a appris
 
-Deux exports du SEAO ont été analysés en entier : la semaine du 7 au 13 septembre 2026, avec
-1 561 fiches municipales, et le mois d'août 2026, avec 7 476 fiches municipales. Plusieurs constats
-ont directement orienté la suite du projet.
+Sept exports du SEAO ont été analysés en entier : les mois de mai, août et septembre 2026, et quatre
+semaines de septembre et d'octobre, soit 28 611 fiches municipales distinctes. Les constats qui
+suivent ont été établis sur les deux premiers étudiés, la semaine du 7 au 13 septembre 2026, avec
+1 561 fiches municipales, et le mois d'août 2026, avec 7 476. Ils ont directement orienté la suite
+du projet.
 
 - **Une fiche n'est pas un contrat.** Un export contient surtout des mises à jour de dossiers plus
   anciens. Sur 1 561 fiches, seulement 403 correspondent à un avis ouvert pendant la semaine.
@@ -71,21 +73,29 @@ ont directement orienté la suite du projet.
 - **Un programme d'analyse**, `analyser_seao.py`, qui lit un export du SEAO, garde les acheteurs
   municipaux et produit quatre tableaux : le détail par fiche avec un lien vers l'avis public, un
   résumé par organisme, l'état du contexte municipal, et une liste de points à relire. Il repère
-  aussi les dossiers PGA-Eau avec une règle dédiée (colonne `pga_eau`).
+  aussi les dossiers PGA-Eau avec une règle dédiée (colonne `pga_eau`), et, plus largement, tout ce
+  qui touche à la gestion des actifs en eau : plans d'intervention des réseaux, plans de gestion
+  des actifs, logiciels (colonne `gestion_actifs_eau`).
 - **Un programme de contexte**, `completer_contexte.py`, qui rattache les organismes au répertoire
   des municipalités et aux données sur l'eau potable. Il tolère les écarts d'écriture du SEAO, mais
   n'accepte un nom seulement approché que si un indice publié le confirme. Population, superficie et
-  région sont renseignées pour 305 des 346 organismes de la semaine et 593 des 665 organismes
-  d'août. Les autres ne sont pas des municipalités : des régies, des sociétés de transport, des
-  offices d'habitation. Les neuf cas qu'aucun indice ne permettait de trancher ont été réglés à la
-  main, chacun avec sa source publique.
+  région sont renseignées pour 934 des 1 042 organismes des sept exports. Les 108 autres ne sont pas
+  des municipalités : des régies, des sociétés de transport, des offices d'habitation. Les 18 cas
+  qu'aucun indice ne permettait de trancher ont été réglés à la main, chacun avec sa source
+  publique.
 - **Un fichier de contexte protégé**, `contexte_municipalites.csv`, qui reçoit les organismes de
   chaque nouvel export sans qu'aucune ligne existante ni aucune saisie manuelle ne soit modifiée. Une
   case sans chiffre y dit pourquoi : à compléter, sans objet, hors MRC ou aucune donnée.
 - **Une base PostgreSQL**, remplie par `charger_base.py`. Elle range les données en quatre groupes,
-  le territoire, les organismes, les fiches du SEAO et les analyses, soit 19 tables. Elle cumule
+  le territoire, les organismes, les fiches du SEAO et les analyses, soit 20 tables. Elle cumule
   plusieurs exports sans compter deux fois un même dossier, et garde la dernière version de chaque
   contrat.
+- **Une table des démarches**, tenue à la main dans `demarches.csv` : les 33 dossiers repérés, chacun
+  classé après lecture (élaboration d'un PGA-Eau, étape, plan d'intervention, plan de gestion des
+  actifs, démarche voisine ou outil). Une vue en tire l'état de chaque municipalité du répertoire :
+  10 ont un PGA-Eau repéré dans le SEAO, 16 une démarche liée, et 1 255 n'ont aucune trace dans les
+  exports chargés. Elle ne dit jamais « pas de plan », puisqu'une partie des mandats ne passe pas par
+  le SEAO.
 - **Un essai de modèle de langage** : qwen2.5, un petit modèle installé avec Ollama sur un ordinateur
   personnel, pour lire les fiches du SEAO une à une.
 - **Un rapport destiné au CERIU**, qui présente les résultats, leurs limites et les décisions
@@ -95,7 +105,7 @@ ont directement orienté la suite du projet.
 
 Ce qui a pu être vérifié à ce stade :
 
-- 67 tests automatisés vérifient les comportements délicats du code, comme l'identification des
+- 69 tests automatisés vérifient les comportements délicats du code, comme l'identification des
   fournisseurs, la protection des saisies manuelles, le départage des homonymes et la tolérance aux
   fautes de frappe;
 - les programmes donnent exactement les mêmes résultats d'une exécution à l'autre, et chaque
@@ -103,14 +113,18 @@ Ce qui a pu être vérifié à ce stade :
 - des fiches représentatives ont été examinées directement dans le JSON et sur les avis publiés;
 - la tolérance aux fautes a été mise à l'épreuve : sur 36 907 fautes introduites exprès dans les noms
   officiels, 83 % sont retrouvées, et aucune ne mène à une mauvaise municipalité;
-- la base de données redonne exactement les chiffres du programme d'analyse : mêmes fiches, mêmes
-  montants au cent près, mêmes dossiers PGA-Eau. Un second chargement n'ajoute rien;
-- la détection des PGA-Eau a été mesurée : chercher le mot « PGA-Eau » trouve deux des quatre
-  dossiers de l'export d'août, et le filtre « lié à l'eau » les trouve tous, parmi 749 fiches. La
-  règle maintenant intégrée au programme trouve les cinq dossiers des deux exports sans faux
-  positif. Ce résultat reste à confirmer sur d'autres périodes. Et ces cinq dossiers ont eux-mêmes
-  été repérés par leur titre : la règle ne dit rien des mandats dont le titre ne parle ni de PGA ni
-  de gestion d'actifs;
+- la base de données redonne exactement les chiffres du programme d'analyse, export par export :
+  mêmes fiches, mêmes montants au cent près, mêmes dossiers repérés. Un second chargement n'ajoute
+  rien;
+- la détection des PGA-Eau a été mesurée. Dans l'export d'août, chercher le mot « PGA-Eau » trouve
+  deux des quatre dossiers, et le filtre « lié à l'eau » les trouve tous, parmi 749 fiches. Sur les
+  sept exports, la règle intégrée au programme repère 15 dossiers, tous lus un par un : 13 sont
+  l'élaboration d'un PGA-Eau ou une de ses étapes, les 2 autres touchent aussi à la gestion des
+  actifs en eau. Le repérage large en ajoute 18 que la règle ratait, faute du mot « PGA-Eau » dans
+  leur titre : plans d'intervention des réseaux d'eau, plan de gestion de tous les actifs,
+  logiciels. Aucun des 33 n'est hors sujet;
+- ces chiffres ne valent que pour les dossiers dont le titre ou la description emploie ces mots. Ils
+  ne disent rien des mandats qui n'en parlent pas, ni de ceux qui ne passent pas par le SEAO;
 - le petit modèle de langage sait extraire des champs précis d'une fiche, mais quand on lui demande
   d'analyser cinq fiches à la fois, il ne reconnaît aucun des trois dossiers PGA-Eau. Il coupe aussi,
   sans prévenir, un message trop long pour sa fenêtre de lecture.

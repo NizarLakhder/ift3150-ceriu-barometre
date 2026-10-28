@@ -122,5 +122,5 @@ Les seuils de réussite chiffrés restent à préciser avec le superviseur.
 | Ouverture de projet            | 4 septembre   | 15 septembre  | Proposition de projet               | ✅ Terminé  |
 | Études préliminaires           | 16 septembre  | 2 octobre     | Diagnostic des données, prototype, rapport au CERIU | ✅ Terminé  |
 | Première mise en commun        | 2 octobre     | 2 octobre     | Présentation                        | ✅ Terminé  |
-| Réalisation                    | 5 octobre     | À préciser    | Contexte municipal complet, base de données PostgreSQL | 🔄 En cours |
+| Réalisation                    | 5 octobre     | À préciser    | Contexte municipal complet, base de données PostgreSQL, table des démarches | 🔄 En cours |
 | Présentation + Rapport         | 7 décembre    | 14 décembre   | Présentation + Rapport              | ⏳ À venir  |
