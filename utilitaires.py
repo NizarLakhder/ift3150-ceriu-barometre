@@ -1,13 +1,6 @@
 """
-Les petites fonctions utilitaires du projet : nettoyer un texte, lire une
-date, convertir un montant, écrire un CSV.
-
-Projet IFT3150 de Nizar Lakhder, Université de Montréal, automne 2026.
-
-Ces fonctions ne savent rien du baromètre lui-même. Les règles du projet,
-comme ce qui compte pour une fiche municipale ou un dossier PGA-Eau, restent
-dans analyser_seao.py. Les ranger à part allège ce programme et permet de
-s'en servir ailleurs, comme le fait charger_base.py.
+Petites fonctions partagées : nettoyer un texte, lire une date, convertir un
+montant, écrire un CSV. Les règles du baromètre restent dans analyser_seao.py.
 """
 
 import csv
@@ -19,23 +12,16 @@ import re
 # ---------------------------------------------------------------------------
 
 def clean_text(value):
-    """Réduit les suites d'espaces à un seul et retire ceux des bords.
-
-    Une valeur absente devient une chaîne vide, pour éviter d'écrire « None »
-    dans les CSV.
-    """
+    """Réduit les espaces à un seul et retire ceux des bords; None devient une chaîne vide."""
     if value is None:
         return ""
     return re.sub(r"\s+", " ", str(value)).strip()
 
 
 def clean_org_name(name):
-    """Nettoie un nom d'organisme : espaces en trop et ponctuation finale.
+    """Retire les espaces en trop et la ponctuation finale d'un nom d'organisme.
 
-    « Ville de Lévis. » devient « Ville de Lévis ». Deux écritures qui ne
-    diffèrent que par ces détails se retrouvent ainsi regroupées. Les autres
-    variantes restent séparées : ce nettoyage ne remplace pas un vrai
-    identifiant municipal.
+    « Ville de Lévis. » devient « Ville de Lévis ».
     """
     return clean_text(name).rstrip(" .,-")
 
@@ -45,11 +31,7 @@ def clean_org_name(name):
 # ---------------------------------------------------------------------------
 
 def safe_float(value):
-    """Convertit en nombre, ou retourne None si ce n'est pas possible.
-
-    Un montant absent n'est pas un montant nul : on ne le remplace jamais par
-    zéro, sinon il ferait baisser les médianes sans raison.
-    """
+    """Convertit en nombre, ou retourne None : un montant absent n'est pas un montant nul."""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -73,11 +55,10 @@ def day(value):
 
 
 def valid_date(value):
-    """Retourne la date AAAA-MM-JJ si sa forme est correcte, sinon une chaîne vide.
+    """Retourne la date AAAA-MM-JJ, ou une chaîne vide si sa forme est incorrecte.
 
-    Le SEAO utilise « 0001-01-01 » comme date fictive : on l'écarte aussi.
-    On vérifie seulement la forme du texte, pas que le jour existe dans le
-    calendrier.
+    La date fictive du SEAO, « 0001-01-01 », est écartée. Seule la forme est
+    vérifiée, pas l'existence du jour.
     """
     d = day(value)
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d) and not d.startswith("0001"):
@@ -86,19 +67,11 @@ def valid_date(value):
 
 
 def date_from_release_id(release):
-    """Lit la date contenue dans l'identifiant de la fiche.
+    """La date lue dans l'identifiant de la fiche : 20260907120000 donne 2026-09-07.
 
-    L'identifiant est un horodatage à 14 chiffres, comme 20260907120000; ses
-    huit premiers chiffres donnent une date. Dans l'export de la semaine, ces
-    dates tombent toutes entre le 7 et le 13 septembre; dans celui d'août,
-    entre le 1er août et le 1er septembre. C'est donc très probablement la
-    date de publication de la fiche, mais aucune définition officielle ne le
-    confirme : la colonne s'appelle « date_deduite_id_release » pour le rappeler.
-
-    À ne pas confondre avec release.date, qui est presque toujours la date
-    d'ouverture de l'avis (1 518 fiches municipales sur 1 561 dans l'export de
-    la semaine). Et l'identifiant seul n'est pas unique : deux dossiers
-    différents peuvent le partager.
+    Sans doute la date de publication (celles de l'export de la semaine tombent
+    toutes entre le 7 et le 13 septembre), mais aucune définition officielle ne
+    le confirme. release.date, elle, est presque toujours l'ouverture de l'avis.
     """
     rid = clean_text(release.get("id"))
     if re.fullmatch(r"\d{14}", rid):
@@ -116,11 +89,9 @@ def top(counter, n=3):
 
 
 def write_csv(path, rows):
-    """Écrit un CSV, en remplaçant celui qui existe.
+    """Écrit un CSV en UTF-8 avec BOM, pour qu'Excel affiche les accents.
 
-    L'encodage UTF-8 avec BOM permet à Excel d'afficher les accents
-    correctement. Si la liste est vide, rien n'est écrit, et un ancien fichier
-    du même nom reste en place.
+    Une liste vide n'écrit rien : l'ancien fichier reste en place.
     """
     if not rows:
         return
