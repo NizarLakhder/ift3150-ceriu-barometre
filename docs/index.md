@@ -15,7 +15,7 @@ title: Vue d'ensemble du projet
 !!! info "Informations générales"
 
     **Session** : Automne 2026  
-    **Auteur** : Nizar Lakhder (20229915)  
+    **Auteur** : Nizar Lakhder  
     **Thèmes** : Données ouvertes, automatisation, ingénierie des données, gestion d'actifs municipale, visualisation  
     **Superviseur** : Louis-Édouard Lafontant (Université de Montréal)  
     **Collaborateur** : Jérémy Diaz (CERIU)

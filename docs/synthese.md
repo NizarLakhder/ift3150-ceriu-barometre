@@ -87,7 +87,7 @@ du projet.
   chaque nouvel export sans qu'aucune ligne existante ni aucune saisie manuelle ne soit modifiée. Une
   case sans chiffre y dit pourquoi : à compléter, sans objet, hors MRC ou aucune donnée.
 - **Une base PostgreSQL**, remplie par `charger_base.py`. Elle range les données en quatre groupes,
-  le territoire, les organismes, les fiches du SEAO et les analyses, soit 20 tables. Elle cumule
+  le territoire, les organismes, les fiches du SEAO et les analyses, soit 21 tables. Elle cumule
   plusieurs exports sans compter deux fois un même dossier, et garde la dernière version de chaque
   contrat.
 - **Une table des démarches**, tenue à la main dans `demarches.csv` : les 33 dossiers repérés, chacun
@@ -105,7 +105,7 @@ du projet.
 
 Ce qui a pu être vérifié à ce stade :
 
-- 69 tests automatisés vérifient les comportements délicats du code, comme l'identification des
+- 77 tests automatisés vérifient les comportements délicats du code, comme l'identification des
   fournisseurs, la protection des saisies manuelles, le départage des homonymes et la tolérance aux
   fautes de frappe;
 - les programmes donnent exactement les mêmes résultats d'une exécution à l'autre, et chaque
