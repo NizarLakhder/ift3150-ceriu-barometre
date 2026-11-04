@@ -1,8 +1,6 @@
-"""Tests de charger_base.py : la conversion des fiches en lignes de tables.
+"""Tests de charger_base.py : la conversion des fiches en lignes de tables, sans PostgreSQL.
 
-Ils n'ont pas besoin de PostgreSQL. Ce qui touche la base elle-même (ne pas
-charger deux fois, redonner les chiffres des CSV) est vérifié à chaque
-chargement par la fonction verifier.
+La base elle-même est vérifiée à chaque chargement, par la fonction verifier.
 
 Commande : python -B -m unittest -v test_charger_base
 """
@@ -46,6 +44,12 @@ MATAGAMI = {
 }
 
 
+def fournisseur(identifiant, nom, neq=None, adresse=None):
+    """Un fournisseur tel que lignes_de_la_fiche le lit dans une fiche."""
+    return {"identifiant": identifiant, "nom": nom, "neq": neq, "adresse": adresse, "localite": None,
+            "region": None, "code_postal": None, "pays": None}
+
+
 class ConversionsTests(unittest.TestCase):
     """Les petites conversions qui transforment le texte publié en valeurs de base de données."""
 
@@ -69,8 +73,22 @@ class ConversionsTests(unittest.TestCase):
         self.assertEqual(base.code_mrc_de("Communauté métropolitaine de Montréal (663)", "CM"), "CM663")
         self.assertIsNone(base.code_mrc_de(""))
 
-    def test_period_is_read_from_the_file_name(self):
-        self.assertEqual(base.periode_de("hebdo_20260907_20260913.json"), (date(2026, 9, 7), date(2026, 9, 13)))
+    def test_export_type_and_period_are_read_from_the_file_name(self):
+        self.assertEqual(base.decrire_export("hebdo_20260907_20260913.json"),
+                         ("hebdomadaire", date(2026, 9, 7), date(2026, 9, 13)))
+        self.assertEqual(base.decrire_export("mensuel_20260801_20260831.json"),
+                         ("mensuel", date(2026, 8, 1), date(2026, 8, 31)))
+        # Un nom d'une autre forme ne dit ni le type ni la période : il arrête tout.
+        with self.assertRaises(ValueError):
+            base.decrire_export("export_septembre.json")
+
+    def test_labels_become_the_codes_of_the_base(self):
+        self.assertEqual(base.code_de("etat", "mandat attribué"), "mandat_attribue")
+        self.assertEqual(base.code_de("gestion_actifs_eau", "plan d'intervention"), "plan_intervention")
+        self.assertEqual(base.code_de("nature_transaction", "subvention ou contribution"), "subvention_ou_contribution")
+        # Un libellé inconnu, même à une faute près, arrête le chargement.
+        with self.assertRaises(ValueError):
+            base.code_de("etat", "mandat attribue")
 
     def test_known_buyer_identifier_wins_over_a_new_spelling_of_the_name(self):
         connus = {"OP-81577": 1}
@@ -85,80 +103,141 @@ class ConversionsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             base.organisme_de("OP-81577", "Ville de Montréal", connus, organismes)
 
-    def test_organism_type_follows_the_code(self):
-        self.assertEqual(base.type_organisme("92030"), "municipalité")
-        self.assertEqual(base.type_organisme("AR930"), "MRC ou communauté")
-        self.assertEqual(base.type_organisme("CM663"), "MRC ou communauté")
-        self.assertEqual(base.type_organisme("À compléter"), "non municipal")
+    def test_organism_type_is_found_in_the_directory(self):
+        municipalites, mrc = {"92030"}, {"AR930", "CM663"}
+        self.assertEqual(base.type_organisme("92030", municipalites, mrc), "municipalite")
+        self.assertEqual(base.type_organisme("AR930", municipalites, mrc), "mrc_ou_communaute")
+        self.assertEqual(base.type_organisme("CM663", municipalites, mrc), "mrc_ou_communaute")
+        self.assertEqual(base.type_organisme("À compléter", municipalites, mrc), "non_municipal")
+        # Un code absent du répertoire n'est pas deviné d'après sa forme.
+        with self.assertRaises(ValueError):
+            base.type_organisme("AR999", municipalites, mrc)
 
 
 class FicheTests(unittest.TestCase):
     """Une fiche du SEAO devient des lignes, une liste par table."""
 
     def test_matagami_is_split_into_its_tables(self):
-        lignes = base.lignes_de_la_fiche(MATAGAMI, "hebdo_20260907_20260913.json")
+        lignes = base.lignes_de_la_fiche(MATAGAMI)
         fiche = lignes["fiche"]
-        self.assertEqual((fiche["ocid"], fiche["release_id"]), ("ocds-ec9k95-20170481", "20260911172212"))
+        self.assertEqual((lignes["ocid"], fiche["release_id"]), ("ocds-ec9k95-20170481", "20260911172212"))
         self.assertEqual(fiche["date_deduite_numero"], date(2026, 9, 11))
         self.assertEqual(fiche["acheteur_id"], "OP-70456")
         self.assertEqual(fiche["nomenclature_code"], "S5")
+        # Les étiquettes restent dans la fiche, sous forme de liste.
+        self.assertEqual(fiche["tags"], ["contract"])
         self.assertEqual(lignes["acheteur"]["organisme"], "Ville de Matagami")
-        self.assertEqual([t["tag"] for t in lignes["tags"]], ["contract"])
         self.assertEqual([(c["code"], c["principale"]) for c in lignes["classifications"]],
                          [("77000000", True), ("77100000", False), ("77101700", False)])
         self.assertEqual(lignes["attributions"][0]["montant"], Decimal("4892.19"))
-        self.assertEqual(lignes["contrats"][0]["attribution_id"], "20165337")
-        self.assertEqual([f["fournisseur_id"] for f in lignes["fournisseurs"]], ["FO-1142385377"])
+        self.assertEqual(lignes["attributions"][0]["identifiant_fournisseur"], "FO-1142385377")
+        self.assertEqual(lignes["contrats"][0]["numero_attribution"], "20165337")
+        self.assertEqual([f["identifiant"] for f in lignes["fournisseurs"]], ["FO-1142385377"])
         self.assertEqual(lignes["fournisseurs"][0]["neq"], "1142385377")
-        self.assertEqual([s["fournisseur_id"] for s in lignes["soumissionnaires"]], ["FO-1142385377"])
+        self.assertEqual(lignes["soumissionnaires"], ["FO-1142385377"])
 
     def test_inconsistent_fiche_stops_the_load(self):
         # Le schéma range le fournisseur dans l'attribution : deux fournisseurs ne rentrent pas.
         fiche = copy.deepcopy(MATAGAMI)
         fiche["awards"][0]["suppliers"].append({"name": "Autre", "id": "FO-2"})
         with self.assertRaises(ValueError):
-            base.lignes_de_la_fiche(fiche, "test.json")
+            base.lignes_de_la_fiche(fiche)
         # Un contrat qui renvoie à une attribution absente de la fiche.
         fiche = copy.deepcopy(MATAGAMI)
         fiche["contracts"][0]["awardID"] = "99999999"
         with self.assertRaises(ValueError):
-            base.lignes_de_la_fiche(fiche, "test.json")
+            base.lignes_de_la_fiche(fiche)
 
     def test_tenderer_missing_from_parties_is_still_kept(self):
         # Cas réel : 361 soumissionnaires des deux exports ne figurent pas dans la liste des parties.
         fiche = copy.deepcopy(MATAGAMI)
         fiche["tender"]["tenderers"].append({"id": "FO-20159563", "name": "CONTROL CASE LLC"})
-        lignes = base.lignes_de_la_fiche(fiche, "test.json")
-        self.assertIn(("FO-20159563", "CONTROL CASE LLC"), [(f["fournisseur_id"], f["nom"]) for f in lignes["fournisseurs"]])
+        lignes = base.lignes_de_la_fiche(fiche)
+        self.assertIn(("FO-20159563", "CONTROL CASE LLC"), [(f["identifiant"], f["nom"]) for f in lignes["fournisseurs"]])
         self.assertEqual(len(lignes["soumissionnaires"]), 2)
+
+    def test_same_fiche_in_another_order_is_not_another_version(self):
+        # Cas réel : le SEAO republie souvent une fiche avec ses parties dans un autre ordre.
+        autre_ordre = copy.deepcopy(MATAGAMI)
+        autre_ordre["parties"].reverse()
+        self.assertTrue(base.meme_contenu(MATAGAMI, autre_ordre))
+        # Mais il change parfois aussi ses étiquettes : c'est une autre version.
+        autres_etiquettes = copy.deepcopy(MATAGAMI)
+        autres_etiquettes["tag"] = ["contractUpdate", "tenderUpdate"]
+        self.assertFalse(base.meme_contenu(MATAGAMI, autres_etiquettes))
 
     def test_missing_amount_stays_missing(self):
         # Un montant absent n'est pas un montant nul.
         fiche = copy.deepcopy(MATAGAMI)
         del fiche["awards"][0]["value"]["amount"]
-        self.assertIsNone(base.lignes_de_la_fiche(fiche, "test.json")["attributions"][0]["montant"])
+        self.assertIsNone(base.lignes_de_la_fiche(fiche)["attributions"][0]["montant"])
+
+
+class FournisseursTests(unittest.TestCase):
+    """Les identifiants FO d'un export, rangés par entreprise."""
+
+    def test_same_neq_means_same_company(self):
+        lus = [fournisseur("FO-1", "Aqua Data inc.", neq="1111111111"),
+               fournisseur("FO-2", "AQUA DATA INC.", neq="1111111111"),
+               fournisseur("FO-3", "Autre inc.")]
+        a_creer, rattaches, a_mettre_a_jour = base.regrouper_fournisseurs(lus, {}, {})
+        # Deux identifiants, un seul NEQ : une seule entreprise, qui garde le dernier nom lu.
+        self.assertEqual([g["identifiants"] for g in a_creer], [["FO-1", "FO-2"], ["FO-3"]])
+        self.assertEqual(a_creer[0]["infos"]["nom"], "AQUA DATA INC.")
+        self.assertEqual((rattaches, a_mettre_a_jour), ([], {}))
+
+    def test_new_identifier_with_a_known_neq_joins_its_company(self):
+        a_creer, rattaches, a_mettre_a_jour = base.regrouper_fournisseurs(
+            [fournisseur("FO-9", "Aqua Data inc.", neq="1111111111")], {"FO-1": 7}, {"1111111111": 7})
+        self.assertEqual((a_creer, rattaches), ([], [("FO-9", 7)]))
+        self.assertEqual(a_mettre_a_jour[7]["nom"], "Aqua Data inc.")
+
+    def test_missing_neq_or_address_never_erases_a_known_one(self):
+        # Le même fournisseur lu deux fois : dans les parties, puis comme simple soumissionnaire.
+        lus = [fournisseur("FO-1", "Aqua Data inc.", neq="1111111111", adresse="1 rue de l'Eau"),
+               fournisseur("FO-1", "AQUA DATA")]
+        infos = base.regrouper_fournisseurs(lus, {}, {})[0][0]["infos"]
+        self.assertEqual((infos["nom"], infos["neq"], infos["adresse"]), ("AQUA DATA", "1111111111", "1 rue de l'Eau"))
+
+    def test_known_identifier_with_another_company_neq_stops_the_load(self):
+        with self.assertRaises(ValueError):
+            base.regrouper_fournisseurs([fournisseur("FO-1", "A", neq="2222222222")], {"FO-1": 7}, {"2222222222": 8})
 
 
 class DemarchesTests(unittest.TestCase):
     """Une ligne de demarches.csv, classée à la main, devient une ligne de table."""
 
-    def test_demarche_line_is_converted_and_its_organism_must_exist(self):
-        ligne = {"organisme": "Ville de Nicolet", "plan": "PGA-Eau", "classement": "élaboration",
-                 "etat": "mandat attribué", "date_attribution": "2026-07-28", "date_publication": "2026-08-05",
-                 "montant": "77061.99", "fournisseur": "LES SERVICES EXP INC.", "ocid": "ocds-ec9k95-20163303",
-                 "lien": "", "source": "SEAO", "notes": ""}
-        rangee = base.ligne_de_demarche(ligne, {"Ville de Nicolet": 7})
-        self.assertEqual(rangee["organisme_id"], 7)
+    LIGNE = {"organisme": "Ville de Nicolet", "plan": "PGA-Eau", "classement": "élaboration",
+             "etat": "mandat attribué", "date_attribution": "2026-07-28", "date_publication": "2026-08-05",
+             "montant": "77061.99", "fournisseur": "LES SERVICES EXP INC.", "ocid": "ocds-ec9k95-20163303",
+             "lien": "", "source": "SEAO", "notes": ""}
+
+    def convertir(self, **changements):
+        return base.ligne_de_demarche({**self.LIGNE, **changements}, {"Ville de Nicolet": 7},
+                                      {"ocds-ec9k95-20163303": 3, "ocds-ec9k95-1": 4}, {3: {12}})
+
+    def test_demarche_line_is_converted_and_linked_to_its_dossier(self):
+        rangee = self.convertir()
+        self.assertEqual((rangee["organisme_id"], rangee["dossier_id"], rangee["fournisseur_id"]), (7, 3, 12))
+        self.assertEqual((rangee["plan"], rangee["classement"], rangee["etat"]), ("pga_eau", "elaboration", "mandat_attribue"))
         self.assertEqual(rangee["date_attribution"], date(2026, 7, 28))
         self.assertEqual(rangee["montant"], Decimal("77061.99"))
         self.assertIsNone(rangee["lien"])
-        # Un appel d'offres en cours n'a ni date d'attribution ni montant : ils restent vides, pas à zéro.
-        en_cours = base.ligne_de_demarche({**ligne, "date_attribution": "", "montant": ""}, {"Ville de Nicolet": 7})
-        self.assertIsNone(en_cours["date_attribution"])
-        self.assertIsNone(en_cours["montant"])
-        # Un organisme absent du contexte arrête tout.
+
+    def test_call_for_tenders_has_no_amount_and_no_supplier(self):
+        # Un appel d'offres en cours n'a ni date d'attribution, ni montant, ni fournisseur : ils restent vides.
+        en_cours = self.convertir(etat="appel d'offres en cours", date_attribution="", montant="", fournisseur="",
+                                  ocid="ocds-ec9k95-1")
+        self.assertEqual((en_cours["date_attribution"], en_cours["montant"], en_cours["fournisseur_id"]), (None, None, None))
+
+    def test_unknown_organism_dossier_or_supplier_stops_everything(self):
         with self.assertRaises(ValueError):
-            base.ligne_de_demarche(ligne, {})
+            base.ligne_de_demarche(self.LIGNE, {}, {"ocds-ec9k95-20163303": 3}, {3: {12}})
+        with self.assertRaises(ValueError):
+            self.convertir(ocid="ocds-ec9k95-absent")
+        # Le fichier nomme un fournisseur, mais le dossier n'en a aucun.
+        with self.assertRaises(ValueError):
+            self.convertir(ocid="ocds-ec9k95-1")
 
 
 if __name__ == "__main__":
