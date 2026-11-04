@@ -1,50 +1,24 @@
 """
-Premier portrait de l'activité contractuelle municipale, à partir d'un export du SEAO.
+Lit un export JSON du SEAO, garde les fiches dont l'acheteur est municipal et
+écrit quatre CSV dans sorties/<export>/ :
 
-Projet IFT3150 de Nizar Lakhder, Université de Montréal, automne 2026.
-Supervision : Louis-Édouard Lafontant. Partenaire : CERIU, Jérémy Diaz.
+  details.csv      une ligne par fiche municipale;
+  comparaison.csv  une ligne par organisme;
+  a_enrichir.csv   le contexte de chaque organisme : population, région, eau;
+  qualite.csv      les points à relire dans la source.
 
-L'idée est simple : avant de construire un baromètre, il faut comprendre ce
-que les données disent vraiment. Ce programme lit un export JSON du SEAO, ne
-garde que les fiches dont l'acheteur est municipal, et les met à plat dans
-quatre tableaux :
+Une fiche (« release ») est l'état d'un dossier au moment de l'export, pas un
+nouveau contrat, et aucun montant publié n'est une dépense payée. Les colonnes
+type_organisme, nature_transaction, lie_eau, pga_eau et gestion_actifs_eau
+viennent de règles à valider.
 
-  1. le détail          : une ligne par fiche municipale;
-  2. la comparaison     : une ligne par organisme;
-  3. le contexte        : ce qu'on sait de chaque organisme (population,
-                          région, état du réseau d'eau) et ce qui manque;
-  4. la qualité         : les points à relire dans la source.
-
-Un mot de vocabulaire, pour éviter le contresens le plus fréquent. Le SEAO
-publie des « releases », qu'on appelle ici des fiches. Une fiche est l'état
-d'un dossier au moment de l'export : un avis, une attribution, un contrat, ou
-la simple mise à jour d'un dossier ancien. Une fiche n'est donc pas un nouveau
-contrat. Dans l'export de la semaine du 7 au 13 septembre 2026, seulement 403
-des 1 561 fiches municipales portent sur un avis ouvert cette semaine-là; la
-plus ancienne remonte à 2013.
-
-Deux prudences à garder en tête en lisant les résultats :
-  - aucun montant publié n'est une dépense payée;
-  - quatre classements sont des propositions à valider avec le CERIU : le
-    repérage des dossiers liés à l'eau, celui des PGA-Eau, celui des
-    subventions, et le type d'organisme deviné à partir du nom.
+Les organismes nouveaux sont ajoutés à la fin de contexte_municipalites.csv,
+sans toucher aux lignes existantes; completer_contexte.py remplit ensuite les
+cases « À compléter ».
 
 Utilisation :
-    python analyser_seao.py                                  # export de la semaine
-    python analyser_seao.py mensuel_20260801_20260831.json   # un autre export
-
-Chaque export a son dossier dans sorties/, au nom de sa période, par exemple
-sorties/hebdo_20260907_20260913/ : les quatre tableaux s'y appellent
-details.csv, comparaison.csv, a_enrichir.csv et qualite.csv.
-
-Le contexte municipal vit dans contexte_municipalites.csv. Ce programme le crée
-au premier lancement. Ensuite, il y ajoute seulement, à la fin, les organismes
-qu'un nouvel export fait apparaître ; il ne modifie jamais une ligne existante.
-Seul completer_contexte.py remplit des valeurs, et uniquement dans les cases
-encore « À compléter ».
-Le rapport pour le CERIU s'écrit à la main : ce programme n'en génère aucun.
-Les petites fonctions utilitaires, comme le nettoyage d'un texte, la lecture
-d'une date ou l'écriture d'un CSV, sont rangées dans utilitaires.py.
+    python analyser_seao.py                                  # export de la semaine du 7 septembre 2026
+    python analyser_seao.py mensuel_20260801_20260831.json   # un autre export de donnees_seao/
 """
 
 import csv
@@ -60,44 +34,32 @@ from pathlib import Path
 from utilitaires import (clean_org_name, clean_text, date_from_release_id, format_money,
                          safe_float, top, valid_date, write_csv)
 
-# Les fichiers sont rangés selon leur rôle : les exports bruts du SEAO d'un
-# côté, ce que le programme produit de l'autre. Seul le fichier de contexte
-# reste à la racine, parce que c'est le seul qu'on remplit à la main.
 DOSSIER_SEAO = Path("donnees_seao")
 DOSSIER_SORTIES = Path("sorties")
 
-# L'export analysé quand on ne donne aucun argument, et le fichier de contexte.
+# L'export lu sans argument, et le fichier de contexte, tenu à la main.
 JSON_FILE = DOSSIER_SEAO / "hebdo_20260907_20260913.json"
 CONTEXT_SOURCE_CSV = Path("contexte_municipalites.csv")
-# L'ancienne vue de contexte, d'avant l'existence du fichier de contexte. Elle ne
-# sert qu'à créer ce fichier une première fois sans perdre de saisie (voir
-# load_context_source).
+# Ancienne vue, lue une seule fois pour créer le fichier de contexte (voir load_context_source).
 ANCIENNE_VUE_CONTEXTE = DOSSIER_SORTIES / "municipalites_a_enrichir.csv"
 
-# Les colonnes de contexte. Le SEAO n'en fournit aucune : elles se remplissent
-# à la main ou avec completer_contexte.py.
+# Les colonnes que le SEAO ne donne pas : completer_contexte.py ou une saisie à la main les remplit.
 CONTEXT_FIELDS = (
     "code_geographique", "population", "classe_taille", "superficie_km2",
     "region_administrative", "mrc", "type_milieu",
     "particularites_infrastructures", "source_contexte", "notes",
 )
 
-# Sous 1 000 $, un montant mérite qu'on le relise avant de l'additionner : c'est
-# parfois un prix à l'unité plutôt qu'un total. Le seuil est choisi à l'œil;
-# il sert à signaler un montant, jamais à le retirer.
+# Un montant sous 1 000 $ est parfois un prix unitaire : il est signalé, jamais
+# retiré. Seuil choisi à l'œil.
 SEUIL_PRIX_UNITAIRE = 1000
 
-# Codes UNSPSC qui servent à repérer les subventions. C'est un premier filtre,
-# encore trop large : le préfixe 9315 attrape aussi des services financiers,
-# comme un mandat d'auditeur externe à Bois-des-Filion.
+# Codes UNSPSC des subventions. Trop large : 9315 attrape aussi le mandat
+# d'auditeur externe de Bois-des-Filion.
 UNSPSC_SUBVENTION = ("9315", "84101501", "99000000")
 
-# Mots qui signalent un dossier lié à l'eau. Le mot « eau » lui-même n'est pas
-# dans la liste : is_water_related le cherche à part, comme mot entier. Du coup,
-# certaines entrées (« pga-eau », « eaux usées »...) ne changent rien au
-# résultat; la liste compte surtout pour les titres qui n'emploient pas le mot
-# « eau », comme « aqueduc » ou « égout ».
-# Attention : lié à l'eau ne veut pas dire PGA-Eau (voir is_water_related et is_pga_eau).
+# Mots liés à l'eau, en plus du mot « eau » que is_water_related cherche à part.
+# Ils servent surtout aux titres sans ce mot, comme « aqueduc » ou « égout ».
 MOTS_CLES_EAU = [
     "pga-eau", "pga eau", "pga_eau",
     "aqueduc", "égout", "egout", "eau potable", "eaux usées", "eaux usees",
@@ -113,13 +75,11 @@ MOTS_CLES_EAU = [
 # ---------------------------------------------------------------------------
 
 def org_type(name):
-    """Devine le type d'organisme à partir de son seul nom.
+    """Devine le type d'organisme d'après son nom, faute de référentiel ici.
 
-    C'est une devinette assumée : on n'a pas de référentiel ici. « MRC » est
-    testé avant « Municipalité », sinon une municipalité régionale de comté
-    serait prise pour une municipalité. Un nom sans mot repère, comme
-    « Saint-Pie-de-Guire », finit dans « Autre organisme municipal » : ce
-    classement est à relire.
+    « MRC » est testé avant « Municipalité », qui figure dans « municipalité
+    régionale de comté ». Un nom sans mot repère, comme « Saint-Pie-de-Guire »,
+    donne « Autre organisme municipal ».
     """
     n = clean_org_name(name).lower()
     rules = [
@@ -141,12 +101,9 @@ def org_type(name):
 # ---------------------------------------------------------------------------
 
 def get_municipal_buyer_party(release):
-    """Retourne l'acheteur de la fiche s'il est municipal, sinon None.
+    """Retourne l'acheteur de la fiche s'il est marqué municipal, sinon None.
 
-    On se fie au champ details.municipal du SEAO plutôt qu'au nom : c'est plus
-    sûr que de deviner. Dans l'export de la semaine, les 3 890 fiches ont
-    chacune un acheteur, marqué « 0 » ou « 1 ». Attention, « municipal » au
-    sens du SEAO est large : il comprend aussi les MRC, les régies, les
+    Le marqueur details.municipal du SEAO comprend aussi les MRC, les régies, les
     sociétés de transport et les offices d'habitation.
     """
     for party in release.get("parties", []):
@@ -159,12 +116,9 @@ def get_municipal_buyer_party(release):
 def get_suppliers(release):
     """Retourne les fournisseurs retenus, sous la forme {identifiant: nom}.
 
-    On les lit dans les attributions plutôt que dans la liste des parties, qui
-    oublie parfois des fournisseurs quand un dossier a plusieurs lots.
-    L'identifiant permet de reconnaître un fournisseur même quand son nom
-    change d'une fiche à l'autre; le nom ne sert qu'à l'affichage. Un
-    fournisseur sans identifiant est compté à part (voir analyse_release) :
-    on ne fabrique pas d'identifiant à partir de son nom.
+    Ils sont lus dans les attributions : la liste des parties en oublie parfois
+    quand un dossier a plusieurs lots. Un fournisseur sans identifiant est laissé
+    de côté ici et compté à part dans analyse_release.
     """
     suppliers = {}
     for award in release.get("awards") or []:
@@ -176,12 +130,10 @@ def get_suppliers(release):
 
 
 def count_suppliers(rows):
-    """Compte, pour chaque fournisseur, le nombre de fiches où il apparaît.
+    """Compte, pour chaque fournisseur, le nombre de fiches où il apparaît (pas de contrats).
 
-    Un fournisseur présent dans trois lots d'une même fiche compte une fois.
-    On découpe la colonne des identifiants, jamais celle des noms : un nom
-    comme « LASALLE | NHC INC. » contient lui-même une barre verticale et
-    serait coupé en deux. Le résultat est un nombre de fiches, pas de contrats.
+    On découpe la colonne des identifiants, pas celle des noms : « LASALLE | NHC
+    INC. » contient lui-même une barre verticale.
     """
     counts = Counter()
     for row in rows:
@@ -190,10 +142,9 @@ def count_suppliers(rows):
 
 
 def format_suppliers(counter, supplier_names_by_id=None, n=3):
-    """Affiche les fournisseurs les plus fréquents : nom, identifiant, nombre de fiches.
+    """Les fournisseurs les plus fréquents : nom, identifiant et nombre de fiches.
 
-    Quand un fournisseur a plusieurs écritures de son nom, on affiche la
-    première dans l'ordre alphabétique.
+    Quand un identifiant a plusieurs noms, on affiche le premier dans l'ordre alphabétique.
     """
     names_by_id = supplier_names_by_id or {}
     labels = []
@@ -205,16 +156,12 @@ def format_suppliers(counter, supplier_names_by_id=None, n=3):
 
 
 def validate_identifiers(releases):
-    """Vérifie les identifiants avant d'écrire quoi que ce soit.
+    """Lève ValueError si un identifiant manque ou se répète, avant toute écriture.
 
-    Si quelque chose cloche, le programme s'arrête, plutôt que de supprimer ou
-    de fusionner des fiches en silence. Deux règles :
-      - le couple (ocid, identifiant de fiche) doit être unique dans l'export,
-        car l'identifiant de fiche seul peut se répéter d'un dossier à l'autre;
-      - chaque contrat doit avoir un identifiant, sans doublon dans sa fiche.
-
-    En revanche, un même contrat peut revenir dans une autre fiche du même
-    dossier : c'est une nouvelle version, pas un nouveau contrat à additionner.
+      - le couple (ocid, id) doit être unique : l'id seul se répète d'un dossier à l'autre;
+      - chaque contrat a un identifiant, unique dans sa fiche.
+    Un même contrat peut revenir dans une autre fiche du dossier : c'est une
+    nouvelle version, pas un contrat de plus.
     """
     seen = set()
     for release in releases:
@@ -233,29 +180,17 @@ def validate_identifiers(releases):
 
 
 def get_amounts(release):
-    """Calcule les montants d'une fiche. Aucun n'est une dépense payée.
+    """Les montants d'une fiche. Aucun n'est une dépense payée.
 
-      montant_attribue       : la somme des montants au moment de l'attribution
-                               (awards[].value.amount);
-      montant_attribue_total : la somme des totalAmount des attributions, qui
-                               diffère parfois du montant attribué; son sens
-                               reste à valider;
-      montant_contrat        : la somme des montants inscrits aux contrats
-                               (contracts[].value.amount), dont le sens exact
-                               reste lui aussi à confirmer;
-      montant_reference      : notre convention de calcul. Pour chaque
-                               attribution, on prend le montant du contrat lié
-                               s'il existe, sinon le montant attribué.
+      montant_attribue        somme des awards[].value.amount;
+      montant_attribue_total  somme des awards[].value.totalAmount, dont le sens reste à valider;
+      montant_contrat         somme des contracts[].value.amount;
+      montant_reference       pour chaque attribution, le montant de son contrat (relié
+                              par awardID), sinon le montant attribué.
 
-    Pourquoi un montant de référence? Parce qu'un dossier peut avoir dix
-    attributions et un seul contrat publié : additionner les seuls contrats
-    ferait oublier neuf attributions. Le lien entre les deux passe par awardID.
-    Si un montant manque des deux côtés, le total reste partiel.
-
-    Dans les données étudiées, chaque contrat a son attribution, et aucun
-    awardID n'a plus d'un contrat. Le montant de l'appel d'offres lui-même
-    (tender.value, tender.minValue) n'est jamais publié pour les acheteurs
-    municipaux : on ne s'en sert donc pas.
+    Le montant de référence n'oublie pas les attributions sans contrat publié : un
+    dossier peut en avoir dix pour un seul contrat. Le montant de l'appel
+    d'offres (tender.value) n'est jamais publié pour les acheteurs municipaux.
     """
     # On retrouve le contrat de chaque attribution grâce à son awardID.
     contracts_by_award = {}
@@ -301,26 +236,16 @@ def get_amounts(release):
 
 
 def get_categories(release):
-    """Rassemble les quatre façons dont une fiche décrit ce qui est acheté.
+    """Les quatre façons dont une fiche décrit ce qui est acheté.
 
-      categorie_principale : services, travaux ou biens (mainProcurementCategory).
-                             Absente pour les ventes, les partenariats et
-                             la catégorie « Autres »;
-      type_contrat_seao    : le type de contrat SEAO. Le champ est une liste
-                             (additionalProcurementCategories), mais il
-                             contient en pratique une seule valeur parmi sept;
-      nomenclature_seao    : un code de la nomenclature SEAO, comme
-                             « C02 - Ouvrages de génie civil ». Malgré le nom
-                             du champ (items.description), ce n'est pas un
-                             texte libre;
-      unspsc_*             : la classification UNSPSC, beaucoup plus fine, et
-                             ses classifications additionnelles. On garde ces
-                             dernières, car elles précisent parfois ce que le
-                             titre ne dit pas.
-
-    Pour donner une idée : 45 codes de nomenclature et 590 codes UNSPSC dans
-    l'export de la semaine, 51 et 1 512 dans celui d'août. Dans l'export de la
-    semaine, toutes les fiches municipales ont zéro ou un item.
+      categorie_principale  mainProcurementCategory : services, travaux ou biens;
+                            absente pour les ventes, les partenariats et « Autres »;
+      type_contrat_seao     additionalProcurementCategories : une liste, mais une
+                            seule valeur en pratique;
+      nomenclature_seao     items.description : malgré son nom, un code de la
+                            nomenclature SEAO, comme « C02 - Ouvrages de génie civil »;
+      unspsc_*              la classification UNSPSC et ses codes additionnels, qui
+                            précisent parfois ce que le titre ne dit pas.
     """
     tender = release.get("tender") or {}
     nomenclature, unspsc_ids, unspsc_labels, extras = [], [], [], []
@@ -347,14 +272,11 @@ def get_categories(release):
 
 
 def get_nature(type_contrat, unspsc_id, titre):
-    """Classe la fiche : achat, subvention, vente d'immeuble ou partenariat.
+    """Classe la fiche : achat, subvention ou contribution, vente d'immeuble ou partenariat.
 
-    Ce classement a des conséquences, car les subventions sont retirées des
-    totaux d'achats. Or la règle des subventions est encore grossière : elle
-    repose sur quelques codes UNSPSC et sur les mots « subvention » ou
-    « contribution financière » dans le titre, et elle classe à tort le mandat
-    d'auditeur externe de Bois-des-Filion. À valider avant de se servir des
-    totaux comme indicateurs. Tout ce qui n'entre dans aucune case est un achat.
+    Les subventions sont retirées des totaux d'achats, mais leur règle (quelques
+    codes UNSPSC, « subvention » ou « contribution financière » dans le titre)
+    reste grossière : à valider. Tout le reste est un achat.
     """
     if type_contrat == "Ventes de biens immeubles":
         return "vente d'immeuble"
@@ -367,19 +289,13 @@ def get_nature(type_contrat, unspsc_id, titre):
 
 
 def is_water_related(titre, libelles):
-    """Repère les fiches qui parlent d'eau, pour savoir quoi lire en priorité.
+    """Vrai si la fiche parle d'eau : un filet large, pas un repérage du PGA-Eau.
 
-    C'est un filet large, pas une détection du PGA-Eau. Il réagit au mot « eau »
-    pris comme mot entier (pour ne pas attraper « réseau »), ou à un mot de
-    MOTS_CLES_EAU, dans le titre comme dans les classifications. Une simple
-    classification comme « Condenseur refroidi à l'eau » suffit donc.
-
-    Il marque 178 fiches dans l'export de la semaine et 749 dans celui d'août.
-    Les quatre dossiers PGA-Eau d'août en font partie, mais noyés dans le reste.
-    Pour reconnaître un vrai PGA-Eau, voir is_pga_eau.
+    Réagit au mot entier « eau » ou « eaux » (pas à « réseau ») et aux mots de
+    MOTS_CLES_EAU, dans le titre ou les classifications. Une classification comme
+    « Camion-citerne à eau pour la lutte contre les incendies » suffit.
     """
-    # L'apostrophe typographique devient une apostrophe droite, pour que
-    # « station d’épuration » corresponde bien à la liste de mots-clés.
+    # Apostrophe courbe changée en droite, comme dans MOTS_CLES_EAU.
     text = f"{titre} {libelles}".lower().replace("’", "'")
     if re.search(r"\beaux?\b", text):
         return True
@@ -387,22 +303,15 @@ def is_water_related(titre, libelles):
 
 
 def is_pga_eau(titre):
-    """Repère un dossier de plan de gestion des actifs en eau (PGA-Eau) d'après son titre.
+    """Vrai si le titre annonce un plan de gestion des actifs en eau (PGA-Eau).
 
-    Deux façons d'écrire la chose sont reconnues :
-      1. l'acronyme « PGA » suivi du mot « eau », quelle que soit la ponctuation
-         entre les deux : « PGA-Eau », « PGA-EAU », et aussi « PGA – Eau » avec
-         un tiret long, comme l'écrit Windsor;
-      2. les mots « gestion », « actif » et « eau » dans le même titre, pour les
-         municipalités qui n'emploient pas l'acronyme, comme Mont-Tremblant.
-    « eau » doit être un mot entier, et « PGA » aussi : la faute de frappe
-    « ACCOMPGANEMENT » ne compte pas. Un « plan de gestion des eaux pluviales »
-    ne compte pas non plus, faute du mot « actif ».
-
-    Mesure sur les 9 037 fiches municipales des exports de la semaine et d'août :
-    la règle retrouve les cinq dossiers lus à la main, et rien d'autre. Chercher
-    seulement l'acronyme « PGA-Eau » en retrouvait trois. Cinq cas restent trop
-    peu pour conclure : la règle est à valider sur d'autres périodes.
+    Deux formes :
+      1. « PGA » puis « eau », quelle que soit la ponctuation : « PGA-EAU », ou
+         « PGA – Eau » avec un tiret long, comme à Windsor;
+      2. « gestion », « actif » et « eau » dans le même titre, sans l'acronyme,
+         comme à Mont-Tremblant.
+    « PGA » et « eau » doivent être des mots entiers : « ACCOMPGANEMENT » ne
+    compte pas, ni un « plan de gestion des eaux pluviales », faute d'« actif ».
     """
     t = titre.lower().replace("’", "'")
     if re.search(r"\bpga[\W_]*eaux?\b", t):
@@ -425,26 +334,18 @@ MOTS_ROUTES = r"routier|piirl|pisrmm|pavl|securite routiere"
 
 
 def gestion_actifs_eau(titre, description=""):
-    """Repère tout ce qui touche à la gestion des actifs en eau, et dit de quelle famille il s'agit.
+    """Retourne la famille de gestion des actifs en eau d'une fiche, ou une chaîne vide.
 
-    is_pga_eau reconnaît le PGA-Eau lui-même, et rien d'autre. Ce repérage-ci
-    est plus large : il propose aussi les démarches voisines, que l'on classe
-    ensuite à la main dans demarches.csv. Les familles, dans l'ordre :
+    Plus large que is_pga_eau : il propose aussi les démarches voisines, classées
+    ensuite à la main dans demarches.csv. Les tests, dans l'ordre :
       - « PGA-Eau » : is_pga_eau sur le titre, ou l'acronyme dans la description;
+      - un titre sur un autre actif (bâtiment, véhicule, transport...) est écarté;
       - « outil » : un logiciel, une licence ou une solution de gestion d'actifs;
-      - « étape » : une inspection, une auscultation, un portrait ou un
-        inventaire fait « dans le cadre » d'un PGA, d'un plan d'intervention ou
-        d'une démarche de gestion d'actifs;
-      - « plan d'intervention » : un plan d'intervention sur les réseaux d'eau,
-        pas un plan routier (PIIRL, sécurité routière, voirie locale);
-      - « gestion d'actifs » : un plan ou un mandat de gestion des actifs qui
-        ne dit pas « eau », mais qui porte sur les infrastructures municipales,
-        comme le « plan gestion des actifs des infrastructures complet » de
-        Clermont.
-    Les bâtiments, les véhicules et le transport sont laissés de côté pour
-    l'instant. Retourne la famille, ou une chaîne vide.
-
-    Mesure sur les sept exports chargés : voir le suivi de la semaine 8.
+      - « étape » : une inspection, une auscultation, un portrait ou un inventaire
+        fait « dans le cadre » d'un PGA, d'un plan d'intervention ou de gestion;
+      - « plan d'intervention » : sur les réseaux d'eau, pas un plan routier (PIIRL);
+      - « gestion d'actifs » : un plan de gestion des actifs des infrastructures
+        qui ne dit pas « eau », comme celui de Clermont.
     """
     t = texte_de_recherche(titre)
     texte = texte_de_recherche(f"{titre} {description}")
@@ -466,11 +367,9 @@ def gestion_actifs_eau(titre, description=""):
 
 
 def analyse_release(release):
-    """Transforme une fiche municipale en une ligne du tableau détaillé.
+    """Une fiche municipale devient une ligne de details.csv; None si l'acheteur n'est pas municipal.
 
-    Retourne None si l'acheteur n'est pas municipal. Une ligne peut résumer
-    plusieurs lots, attributions ou contrats : pour le détail de chacun, il
-    faut revenir au JSON, ou suivre le lien url_seao vers l'avis.
+    Une ligne résume tous les lots, attributions et contrats de la fiche.
     """
     party = get_municipal_buyer_party(release)
     if party is None:
@@ -491,9 +390,8 @@ def analyse_release(release):
     suppliers = get_suppliers(release)
     supplier_mentions = [s for award in awards for s in award.get("suppliers") or []]
 
-    # Une fiche peut contenir plusieurs contrats. La ligne garde la première date
-    # d'attribution, la première signature et la dernière fin de contrat.
-    # Attention : une date de fin ne prouve pas que les travaux ont été faits.
+    # Plusieurs contrats : on garde la première attribution, la première
+    # signature et la dernière fin prévue.
     award_dates = [valid_date(a.get("date")) for a in awards]
     signed_dates = [valid_date(c.get("dateSigned")) for c in contracts]
     end_dates = [valid_date((c.get("period") or {}).get("endDate")) for c in contracts]
@@ -502,10 +400,8 @@ def analyse_release(release):
     nb_montants_absents = sum(1 for a in awards if safe_float((a.get("value") or {}).get("amount")) is None)
     nb_montants_absents += sum(1 for c in contracts if safe_float((c.get("value") or {}).get("amount")) is None)
 
-    # Deux indices font qu'un montant mérite d'être relu avant d'être additionné.
-    # Aucun ne prouve que le montant est unitaire : souvent, la soumission est
-    # à l'unité alors que le contrat porte bien un total. On note donc la raison
-    # du signalement, et on ne retire aucun montant.
+    # Deux indices d'un prix unitaire possible. Aucun n'est une preuve : on note
+    # la raison, on ne retire aucun montant.
     raisons_montant = []
     if any(clean_text(b.get("valueUnit")) not in ("", "1") for b in bids):
         raisons_montant.append("unité de soumission différente de 1")
@@ -543,9 +439,8 @@ def analyse_release(release):
         "lie_eau": "oui" if lie_eau else "non",
         "pga_eau": "oui" if is_pga_eau(titre) else "non",
         "gestion_actifs_eau": gestion_actifs_eau(titre, clean_text(tender.get("description"))),
-        # Ces noms servent à la lecture, jamais au calcul. Les deux colonnes sont
-        # triées chacune de leur côté : le 2e nom ne correspond pas forcément au
-        # 2e identifiant. Le lien exact nom-identifiant reste dans le JSON.
+        # Pour la lecture seulement : les deux colonnes sont triées séparément, le
+        # 2e nom n'est pas forcément celui du 2e identifiant.
         "fournisseurs": " | ".join(sorted({clean_text(s.get("name")) for s in supplier_mentions if clean_text(s.get("name"))})),
         "fournisseurs_ids": " | ".join(sorted(suppliers)),
         "nb_identifiants_fournisseurs": len(suppliers),
@@ -575,15 +470,9 @@ def analyse_release(release):
 def aggregate_municipalities(rows, supplier_names_by_id=None):
     """Résume les fiches par organisme, une ligne par nom nettoyé.
 
-    Regrouper par nom a une conséquence visible : la Ville de Montréal devient
-    un seul organisme, alors qu'elle publie sous un identifiant par
-    arrondissement ou service (31 dans l'export de la semaine, 36 dans celui
-    d'août). Ce choix reste à discuter.
-
-    Les totaux et médianes ne portent que sur les achats. Les montants à relire
-    y restent : on les signale, on ne les retire pas. Les colonnes
-    « fréquents » disent ce qui revient souvent dans cet export, pas une
-    habitude démontrée dans le temps.
+    Montréal devient ainsi un seul organisme, malgré un identifiant par
+    arrondissement ou service. Totaux et médianes ne portent que sur les achats,
+    montants à relire compris.
     """
     grouped = defaultdict(list)
     for row in rows:
@@ -606,15 +495,12 @@ def aggregate_municipalities(rows, supplier_names_by_id=None):
             "nb_sous_unites": len({r["acheteur_detaille"] for r in items}),
             "localites_observees": " | ".join(sorted({r["localite"] for r in items if r["localite"]})),
             "nb_avis": len(items),
-            # Fiches que le SEAO étiquette « tender », sans regarder leur date
-            # d'ouverture.
+            # Étiquette « tender », quelle que soit la date d'ouverture.
             "nb_releases_tag_tender": sum(1 for r in items if "tender" in r["tags"].split(" | ")),
             "nb_avis_en_cours": sum(1 for r in items if r["statut"] == "active"),
             "nb_avis_avec_contrat": sum(1 for r in items if r["nb_contrats"] > 0),
             "nb_contrats": sum(r["nb_contrats"] for r in items),
-            # Fiches étiquetées « contractTermination ». À ne pas confondre avec
-            # la colonne suivante, qui compte les contrats dont le statut actuel
-            # est « terminated » : une fiche peut en contenir plusieurs.
+            # Des fiches. La colonne suivante compte des contrats au statut « terminated ».
             "nb_releases_tag_contractTermination": sum(1 for r in items if "contractTermination" in r["tags"].split(" | ")),
             "nb_contrats_statut_terminated": sum(r["nb_contrats_statut_terminated"] for r in items),
             "nb_annulations": tags["tenderCancellation"],
@@ -628,8 +514,7 @@ def aggregate_municipalities(rows, supplier_names_by_id=None):
             "montant_max_achats": max(montants) if montants else None,
             "montant_total_subventions": round(sum(subventions), 2) if subventions else None,
             "part_gre_a_gre_pct": round(100 * sum(1 for r in items if r["methode_code"] == "direct") / len(items)),
-            # Les catégories fréquentes ne regardent que les achats : une
-            # subvention ne dit rien du type de travaux d'un organisme.
+            # Achats seulement : une subvention ne dit rien des travaux d'un organisme.
             "types_contrat_frequents": top(Counter(r["type_contrat_seao"] for r in achats)),
             "nomenclatures_frequentes": top(Counter(r["nomenclature_seao"] for r in achats)),
             "unspsc_frequents": top(Counter(r["unspsc_libelle"] for r in achats)),
@@ -643,12 +528,10 @@ def aggregate_municipalities(rows, supplier_names_by_id=None):
 
 
 def build_context_rows(summaries, rows):
-    """Prépare la vue de contexte : une ligne par organisme, tout à « À compléter ».
+    """Une ligne de contexte par organisme, tout à « À compléter ».
 
-    On n'invente rien ici. C'est merge_context_rows qui y reporte ensuite ce
-    qui a été saisi dans contexte_municipalites.csv. La localité et le code
-    postal du SEAO sont repris, parce qu'ils aident à départager deux
-    municipalités qui portent le même nom.
+    merge_context_rows y reporte ensuite la saisie. La localité et le code postal
+    du SEAO sont repris : ils servent à départager les homonymes.
     """
     by_org = defaultdict(list)
     for row in rows:
@@ -676,45 +559,30 @@ def build_context_rows(summaries, rows):
             "type_milieu": "À compléter",
             "particularites_infrastructures": "À compléter",
             "source_contexte": "À compléter",
-            # Les notes sont un champ libre, pas une donnée à trouver : vide,
-            # une note veut seulement dire qu'il n'y a rien à signaler.
+            # Champ libre : vide, il n'y a rien à signaler.
             "notes": "",
         })
     return context
 
 
 def merge_context_rows(context_rows, source_rows, absents=None):
-    """Reporte le contexte saisi à la main sur les organismes de l'export.
+    """Reporte le contexte saisi sur les organismes de l'export. Dans le doute, lève ValueError.
 
-    Le principe : ne jamais rattacher une ligne de contexte au mauvais
-    organisme. Dans le doute, le programme s'arrête et demande de vérifier.
-
-    Pour chaque organisme, on cherche sa ligne de contexte dans cet ordre :
-      1. les mêmes identifiants d'acheteur, peu importe leur ordre;
-      2. sinon, au moins un identifiant en commun et le même nom nettoyé. On
-         accepte en prévenant. C'est le cas de la Ville de Montréal, dont la
-         liste d'identifiants change d'un export à l'autre (31 dans celui de la
-         semaine, 36 dans celui d'août). Si le nom diffère, ou si ces
-         identifiants mènent à plusieurs lignes, on refuse : un identifiant
-         réutilisé ne doit pas suffire à donner la population d'un organisme à
-         un autre;
-      3. sinon, le même nom, mais seulement si la ligne de contexte n'a aucun
-         identifiant. Si elle en a d'autres, on refuse : ce pourrait être un
-         autre organisme qui porte le même nom;
-      4. sinon, l'organisme est nouveau et ses cases restent « À compléter ».
-         Si une liste absents est fournie, on l'y range, pour pouvoir l'ajouter
-         ensuite au fichier de contexte (voir append_context_rows).
-
-    Seules les cases remplies sont reportées : une valeur saisie n'est jamais
-    remplacée par « À compléter ». Ce lien est technique; ce n'est ni un code
-    municipal officiel ni une règle de fusion d'organismes.
+    La ligne de contexte d'un organisme se cherche dans cet ordre :
+      1. les mêmes identifiants d'acheteur, dans n'importe quel ordre;
+      2. un identifiant commun et le même nom, avec un avertissement : la liste de
+         Montréal change d'un export à l'autre. Un nom différent, ou plusieurs
+         lignes visées, arrête tout;
+      3. le même nom, si la ligne de contexte n'a aucun identifiant (sinon, erreur);
+      4. sinon l'organisme est nouveau : il reste « À compléter » et va dans
+         absents, si la liste est fournie (voir append_context_rows).
+    Seules les cases remplies sont reportées.
     """
     def buyer_ids(row):
         return frozenset(part.strip() for part in row.get("buyer_ids", "").split(" | ") if part.strip())
 
-    # D'abord, on indexe les lignes de contexte. Un identifiant qui apparaît
-    # dans deux lignes, ou un même nom sans identifiant répété, rendrait le
-    # rattachement ambigu : on s'arrête tout de suite.
+    # Un identifiant dans deux lignes, ou un nom sans identifiant répété, rend
+    # le rattachement ambigu : on s'arrête.
     by_ids, by_name, owner_by_id = {}, defaultdict(list), {}
     for source in source_rows:
         name = clean_org_name(source.get("organisme"))
@@ -745,8 +613,7 @@ def merge_context_rows(context_rows, source_rows, absents=None):
             candidates = by_name.get(name, [])
             communs = {sid for sid in ids if sid in owner_by_id}
             if communs:
-                # Au moins un identifiant en commun et le même nom : on retient
-                # cette ligne en prévenant, car la liste des acheteurs a changé.
+                # Règle 2 : un identifiant commun et le même nom.
                 proprietaires = {id(owner_by_id[sid]): owner_by_id[sid] for sid in communs}
                 if len(proprietaires) > 1 or len(candidates) > 1:
                     raise ValueError(f"Correspondance de contexte incertaine pour {name}; "
@@ -778,14 +645,10 @@ def merge_context_rows(context_rows, source_rows, absents=None):
 
 
 def append_context_rows(source_path, rows, dossier_sauvegarde=DOSSIER_SORTIES):
-    """Ajoute à la fin du fichier de contexte les organismes qu'il ne connaît pas encore.
+    """Ajoute à la fin du fichier de contexte les organismes nouveaux; retourne leur nombre.
 
-    Les lignes existantes ne sont jamais modifiées. Avant d'écrire, on copie
-    l'ancien fichier dans le dossier de sauvegarde ; après, on vérifie que le
-    début du fichier est resté identique octet pour octet, sinon on restaure la
-    copie et on s'arrête. Les nouvelles lignes arrivent avec leurs cases de
-    contexte à « À compléter », sauf la note, laissée vide. Retourne le nombre
-    de lignes ajoutées.
+    Le fichier est d'abord copié. Si son début change d'un seul octet, la copie
+    est remise en place et ValueError est levée.
     """
     if not rows:
         return 0
@@ -800,8 +663,7 @@ def append_context_rows(source_path, rows, dossier_sauvegarde=DOSSIER_SORTIES):
     nouvelles = [{field: row.get(field, "") if field in ("organisme", "buyer_ids")
                   else ("À compléter" if field in CONTEXT_FIELDS and field != "notes" else "")
                   for field in fields} for row in rows]
-    # En UTF-8 simple, pas « utf-8-sig » : en mode ajout, la signature BOM se
-    # retrouverait au milieu du fichier.
+    # Pas « utf-8-sig » en ajout : le BOM se retrouverait au milieu du fichier.
     with source_path.open("a", encoding="utf-8", newline="") as file:
         if avant and not avant.endswith(b"\n"):
             file.write("\r\n")
@@ -814,16 +676,12 @@ def append_context_rows(source_path, rows, dossier_sauvegarde=DOSSIER_SORTIES):
 
 
 def load_context_source(source_path, generated_path, context_rows):
-    """Retourne les lignes du fichier de contexte, en le créant s'il n'existe pas.
+    """Retourne les lignes du fichier de contexte, sans jamais le réécrire.
 
-    S'il existe, on le lit sans jamais le réécrire. On vérifie seulement qu'il
-    se rattache sans ambiguïté aux organismes de l'export.
-
-    S'il n'existe pas encore, on le crée, une seule fois. On repart alors de
-    l'ancienne vue générée (generated_path) si elle existe, pour ne perdre
-    aucune saisie faite avant que ce fichier existe : les lignes d'organismes
-    absents de l'export courant sont gardées, tout comme les colonnes
-    ajoutées à la main. Sinon, on part d'une vue vierge.
+    Leur rattachement aux organismes de l'export est vérifié (merge_context_rows).
+    S'il n'existe pas, le fichier est créé une seule fois : à partir de l'ancienne
+    vue generated_path si elle existe (lignes et colonnes ajoutées à la main
+    comprises), sinon à partir de context_rows.
     """
     def read_rows(path):
         with Path(path).open("r", encoding="utf-8-sig", newline="") as file:
@@ -832,8 +690,7 @@ def load_context_source(source_path, generated_path, context_rows):
             if not {"organisme", "buyer_ids"}.issubset(fields):
                 raise ValueError(f"Colonnes organisme et buyer_ids requises dans {path}")
             rows = list(reader)
-            # Une ligne avec trop ou trop peu de cellules trahit un CSV abîmé,
-            # par exemple une virgule de trop dans une saisie sans guillemets.
+            # Trop ou trop peu de cellules : une virgule de trop dans une saisie, par exemple.
             if any(None in row or any(value is None for value in row.values()) for row in rows):
                 raise ValueError(f"Ligne CSV incomplète ou mal délimitée dans {path}")
             return rows, fields
@@ -856,11 +713,9 @@ def load_context_source(source_path, generated_path, context_rows):
     fields.extend(field for field in previous_fields if field not in generated_fields)
     source_rows = [{field: row.get(field, "À compléter" if field in CONTEXT_FIELDS else "")
                     for field in fields} for row in previous_rows]
-    # On vérifie le rattachement avant de créer le fichier : en cas
-    # d'ambiguïté, rien n'est écrit.
+    # Vérifié avant d'écrire : en cas d'ambiguïté, rien n'est créé.
     merge_context_rows(context_rows, source_rows)
-    # Le mode « x » refuse d'écrire si le fichier est apparu entre-temps :
-    # impossible d'écraser une saisie par accident.
+    # Le mode « x » refuse d'écraser un fichier apparu entre-temps.
     with source_path.open("x", encoding="utf-8-sig", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=fields)
         writer.writeheader()
@@ -869,13 +724,10 @@ def load_context_source(source_path, generated_path, context_rows):
 
 
 def build_quality_rows(rows, supplier_names_by_id):
-    """Dresse la liste des points à relire, avec le lien vers chaque avis.
+    """Les points à relire, avec le lien vers l'avis. Un signalement n'est pas une erreur.
 
-    Une même fiche peut être signalée plusieurs fois. Un signalement n'est pas
-    une erreur : un nom avec un point final ou une sous-unité de Montréal sont
-    normaux, il vaut juste mieux les connaître avant de compter. Un avis encore
-    sans attribution n'est pas signalé pour son absence de montant : à ce
-    stade, il est normal qu'il n'y en ait pas.
+    Une fiche peut être signalée plusieurs fois. Un avis sans attribution n'est
+    pas signalé pour son absence de montant.
     """
     issues = []
 
@@ -947,10 +799,9 @@ def build_quality_rows(rows, supplier_names_by_id):
 # ---------------------------------------------------------------------------
 
 def trouver_fichier_json(nom):
-    """Accepte un chemin complet, ou seulement le nom d'un export rangé dans donnees_seao/.
+    """Accepte un chemin, ou le seul nom d'un export de donnees_seao/.
 
-    Si le fichier est introuvable, on retourne le nom tel quel : main()
-    affichera l'erreur.
+    Si rien n'est trouvé, le nom revient tel quel et main() affiche l'erreur.
     """
     chemin = Path(nom)
     if chemin.exists():
@@ -960,31 +811,14 @@ def trouver_fichier_json(nom):
 
 
 def noms_de_sortie(fichier_json):
-    """Choisit les chemins des quatre CSV selon l'export analysé.
-
-    Chaque export a son dossier dans sorties/, au nom de sa période, par
-    exemple sorties/mensuel_20260801_20260831/details.csv. Les périodes
-    coexistent sans que l'une écrase l'autre, et le dossier reste lisible
-    quand les exports s'accumulent : un sous-dossier par export, au lieu de
-    quatre fichiers.
-    """
+    """Les chemins des quatre CSV, dans un dossier par export, comme sorties/mensuel_20260801_20260831/."""
     dossier = DOSSIER_SORTIES / Path(fichier_json).stem
     return (dossier / "details.csv", dossier / "comparaison.csv",
             dossier / "a_enrichir.csv", dossier / "qualite.csv")
 
 
 def main():
-    """Analyse un export du SEAO et écrit les quatre CSV.
-
-    Les étapes : lire le JSON, vérifier les identifiants, garder les fiches
-    municipales, résumer par organisme, préparer le contexte et la liste des
-    points à relire, puis écrire. Aucune sortie n'est écrite tant que les
-    vérifications n'ont pas réussi.
-
-    L'export à analyser peut être donné en argument; sans argument, c'est
-    celui de la semaine du 7 au 13 septembre. Les autres fonctions peuvent
-    aussi s'utiliser seules, en mémoire, comme le font les tests.
-    """
+    """Analyse un export et écrit les quatre CSV. Rien n'est écrit avant la fin des vérifications."""
     fichier_json = trouver_fichier_json(sys.argv[1]) if len(sys.argv) > 1 else JSON_FILE
     details_csv, summary_csv, context_csv, quality_csv = noms_de_sortie(fichier_json)
     DOSSIER_SORTIES.mkdir(exist_ok=True)
@@ -1000,8 +834,7 @@ def main():
 
     releases = data.get("releases", [])
     print(f"Nombre total de releases : {len(releases)}")
-    # Au moindre doublon d'identifiant, on s'arrête : mieux vaut une erreur
-    # qu'un total faux.
+    # Un doublon d'identifiant arrête tout : mieux vaut une erreur qu'un total faux.
     validate_identifiers(releases)
 
     details = []
@@ -1022,9 +855,7 @@ def main():
     nouveaux = []
     context_rows = merge_context_rows(context_rows, context_source, absents=nouveaux)
 
-    # Toutes les vérifications ont réussi. On ajoute d'abord au fichier de
-    # contexte les organismes qu'il ne connaît pas encore, sans toucher aux
-    # lignes existantes ; ensuite, on n'écrit plus que dans sorties/.
+    # Les vérifications ont réussi : on peut écrire.
     ajoutes = append_context_rows(CONTEXT_SOURCE_CSV, nouveaux)
     details_csv.parent.mkdir(exist_ok=True)
     write_csv(details_csv, details)

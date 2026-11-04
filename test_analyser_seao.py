@@ -1,9 +1,6 @@
-"""Tests de régression : de petits cas fabriqués à la main, dont on connaît la bonne réponse.
+"""Tests d'analyser_seao.py sur de petites fiches fabriquées, souvent tirées de pièges réels.
 
-Ils ne lisent pas les vrais exports du SEAO. La plupart vérifient un piège
-rencontré pour de vrai dans les données, pour qu'il ne revienne pas sans
-qu'on s'en aperçoive. Les fichiers créés pendant les tests vont dans des
-dossiers temporaires, jamais dans le projet.
+Ils ne lisent pas les vrais exports; les fichiers écrits vont dans des dossiers temporaires.
 
 Commande : python -B -m unittest -v test_analyser_seao
 """
@@ -52,9 +49,8 @@ def rows_and_names(releases):
 class SupplierIdentityTests(unittest.TestCase):
     """Un fournisseur se reconnaît à son identifiant, pas à son nom.
 
-    Pièges réels : un même fournisseur écrit de deux façons différentes, et un
-    nom qui contient une barre verticale, « LASALLE | NHC INC. », que la
-    première version du code coupait en deux fournisseurs.
+    Pièges réels : un même fournisseur écrit de deux façons, et « LASALLE | NHC
+    INC. », un nom qui contient une barre verticale.
     """
 
     def test_supplier_is_identified_by_its_identifier_not_its_name(self):
