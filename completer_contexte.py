@@ -1,89 +1,29 @@
 """
-Complète le contexte municipal avec les données officielles du MAMH.
+Remplit les cases « À compléter » de contexte_municipalites.csv avec deux jeux
+du MAMH déposés dans donnees_reference/ : le Répertoire des municipalités et la
+Stratégie québécoise d'économie d'eau potable (voir FICHIERS; seul MUN.csv est
+obligatoire). Rien n'est téléchargé : les mêmes fichiers donnent toujours les
+mêmes chiffres, et la date de chacun est notée dans source_contexte.
 
-Projet IFT3150 de Nizar Lakhder, Université de Montréal, automne 2026.
+Un organisme du SEAO est rattaché au répertoire, dans l'ordre :
+  1. par le code géographique déjà inscrit : c'est ainsi qu'on règle un cas à
+     la main;
+  2. par le nom exact, sans accents, ponctuation, désignation ni article;
+  3. par une règle tolérante (« St » pour Saint, un « de » oublié, une faute de
+     frappe), qui exige un indice publié : code postal, désignation ou région.
+Des homonymes ne sont départagés que par un tel indice. Sans indice, rien n'est
+rempli : le cas va dans sorties/contexte_a_verifier.csv, avec a_traiter à
+« oui » (« non » pour un organisme non municipal).
 
-Le SEAO ne dit rien de la population, de la superficie ni de l'état des
-réseaux d'eau. Ces informations viennent de deux jeux de données ouverts du
-ministère des Affaires municipales et de l'Habitation, publiés sur Données
-Québec sous licence Creative Commons avec attribution.
+Une valeur déjà présente n'est jamais remplacée. Une case sans chiffre porte
+une étiquette qui dit pourquoi (voir A_COMPLETER et les suivantes). Le type de
+milieu reste « À compléter » : aucun de ces fichiers ne le donne.
 
-Ce programme ne télécharge rien. Il lit les fichiers déposés à la main dans
-donnees_reference/ et reporte leurs valeurs dans contexte_municipalites.csv.
-Pourquoi ne pas télécharger? Pour que les mêmes fichiers donnent toujours les
-mêmes chiffres, et pour ne pas dépendre d'une adresse web qui peut changer du
-jour au lendemain. La date des fichiers utilisés est notée dans la colonne
-source_contexte : on peut toujours retrouver d'où vient une valeur.
+Les codes postaux du SEAO sont lus dans sorties/<export>/a_enrichir.csv :
+lancer analyser_seao.py avant. Le contexte est copié dans
+sorties/contexte_municipalites.csv.bak avant d'être réécrit.
 
-Fichiers attendus dans donnees_reference/, à prendre sur Données Québec :
-
-  Répertoire des municipalités du Québec
-    MUN.csv                          obligatoire : code géographique,
-                                     population, superficie, région, MRC
-    MRC_CM_Arg.csv                   facultatif : MRC et communautés
-                                     métropolitaines
-    A01_CONVERT_XML_ORG_PER_MUN.xml  facultatif : régies, transport,
-                                     habitation
-
-  Stratégie québécoise d'économie d'eau potable 2019-2025, données de 2024
-    validite_classe_2024.csv         facultatif : population desservie et
-                                     validité des audits de l'eau
-    fuites_classe_2024.csv           facultatif : indice de fuites
-    consommation_classe_2024.csv     facultatif : consommation résidentielle
-
-Comment un organisme du SEAO est rattaché au répertoire, dans cet ordre :
-
-  1. par le code géographique, s'il est déjà inscrit dans le contexte. C'est
-     aussi la façon de régler un cas à la main : on écrit le code dans la
-     colonne code_geographique, et le programme remplit le reste;
-  2. par le nom exact, une fois retirés les accents, la ponctuation, la
-     désignation et les articles du début;
-  3. sinon, par une règle tolérante, qui rattrape les écarts d'écriture du
-     SEAO : « St » pour Saint, un « de » oublié, une précision entre
-     parenthèses, une faute de frappe. Voir la section « Rapprochement
-     tolérant » plus bas.
-
-Ce que le programme s'interdit :
-
-  - remplacer une valeur déjà saisie : il ne remplit que les cases encore
-    « À compléter »;
-  - choisir au hasard : quand un nom correspond à plusieurs municipalités du
-    répertoire, il ne tranche qu'avec un indice publié, le code postal donné
-    par le SEAO, une désignation distinctive écrite dans le nom (Canton,
-    Village, Ville, Paroisse) ou une région écrite entre parenthèses. Sans
-    indice, il ne remplit rien et signale le cas, avec les candidats.
-    Les codes postaux sont lus dans les vues produites par analyser_seao.py
-    (sorties/<période>/a_enrichir.csv) : lancer l'analyse avant ce programme;
-  - se fier à une ressemblance : un nom seulement approché, raccourci ou
-    allongé n'est retenu que si un indice le confirme;
-  - inventer : le type de milieu reste à compléter, puisqu'aucun de ces
-    fichiers ne le fournit.
-
-Une case sans chiffre n'est pas forcément une donnée manquante. Le fichier de
-contexte emploie quatre mots, pour que chacun dise la vérité :
-
-  À compléter    la donnée peut exister, mais on ne l'a pas encore trouvée;
-  Sans objet     le champ ne s'applique pas, comme la MRC dont ferait partie
-                 une MRC, ou les données sur l'eau d'une MRC;
-  Hors MRC       ce que dit le répertoire pour les villes qui ne font partie
-                 d'aucune MRC, comme Montréal, Laval ou Longueuil;
-  Aucune donnée  ce que publie la Stratégie pour une municipalité dont elle ne
-                 donne aucune valeur.
-
-Une note vide reste vide : il n'y a simplement rien à signaler.
-
-Avant d'écrire, il copie le contexte actuel dans
-sorties/contexte_municipalites.csv.bak. Il n'y a qu'une sauvegarde, remplacée
-à chaque exécution. Les organismes qu'il n'a pas pu rattacher sont listés dans
-sorties/contexte_a_verifier.csv. La colonne a_traiter y sépare les cas à
-trancher à la main (« oui ») des organismes non municipaux, comme les régies
-et les offices d'habitation, pour lesquels le répertoire n'a ni population ni
-superficie à reporter (« non »).
-
-Une seule bibliothèque externe : rapidfuzz, qui mesure l'écart entre deux
-mots. Installation : pip install -r requirements.txt
-
-Lancement :  python completer_contexte.py
+Lancement : python completer_contexte.py
 """
 
 import csv
@@ -104,8 +44,7 @@ DOSSIER_SORTIES = Path("sorties")
 A_VERIFIER_CSV = DOSSIER_SORTIES / "contexte_a_verifier.csv"
 
 # Pour chaque fichier : son nom, s'il est obligatoire, et où le trouver sur
-# Données Québec (le jeu de données, puis la ressource). Cette description est
-# affichée quand le fichier manque, pour savoir quoi aller chercher.
+# Données Québec (affiché quand il manque).
 FICHIERS = {
     "municipalites": ("MUN.csv", True,
                       "Répertoire des municipalités du Québec, « Liste des municipalités (csv) »"),
@@ -121,8 +60,7 @@ FICHIERS = {
                      "Stratégie d'économie d'eau potable, « Consommation résidentielle 2024, par classe de population »"),
 }
 
-# Les étiquettes du fichier de contexte. Une case vide de sens n'est pas une
-# donnée manquante : chacune dit pourquoi elle n'a pas de valeur chiffrée.
+# Les étiquettes d'une case sans valeur chiffrée.
 A_COMPLETER = "À compléter"      # la donnée peut exister, on ne l'a pas encore trouvée
 SANS_OBJET = "Sans objet"        # le champ ne s'applique pas, comme la MRC d'une MRC
 HORS_MRC = "Hors MRC"            # ce que dit le répertoire des villes qui ne font partie d'aucune MRC
@@ -134,12 +72,10 @@ AUCUNE_DONNEE = "Aucune donnée"  # ce que publie la Stratégie pour une municip
 # ---------------------------------------------------------------------------
 
 def lire_fichiers():
-    """Charge les fichiers présents et dit clairement lesquels manquent.
+    """Lit les fichiers de référence présents et affiche ceux qui manquent.
 
-    Retourne le contenu de chaque fichier trouvé, et sa date. Attention, c'est
-    la date de dernière modification sur le disque, donc en pratique le jour
-    où le fichier a été téléchargé, pas la date de publication par le
-    ministère. S'il manque un fichier obligatoire, retourne (None, None).
+    Retourne (contenus, dates), la date étant celle du fichier sur le disque, donc
+    de son téléchargement; (None, None) s'il manque un fichier obligatoire.
     """
     contenus, dates, absents = {}, {}, []
 
@@ -171,8 +107,7 @@ def lire_csv(contenu):
 # Rapprochement des noms
 # ---------------------------------------------------------------------------
 
-# Désignations retirées au début des noms. Elles sont écrites sans accents,
-# parce qu'on les compare à des noms déjà normalisés.
+# Désignations retirées au début des noms, sans accents comme les noms normalisés.
 DESIGNATIONS = (r"(ville|municipalite regionale de comte|municipalite|mrc|paroisse"
                 r"|cantons unis|canton|village|cite|corporation municipale"
                 r"|communaute metropolitaine|comm metropolitaine)")
@@ -185,18 +120,15 @@ def normaliser(texte):
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", texte)).strip()
 
 
-# Le service que certains acheteurs ajoutent à leur nom. Ce n'est pas un lieu.
+# Service ajouté au nom par certains acheteurs, comme « Ville de Joliette - Approvisionnement ».
 SERVICES = r"\b(approvisionnement|service des acquisitions)\b"
 
 
 def cle_organisme(nom):
-    """Réduit un nom à sa partie distinctive, pour comparer le SEAO au répertoire.
+    """Réduit un nom à sa partie distinctive, pour le comparer au répertoire.
 
-    Le SEAO n'a aucun code officiel de municipalité : on n'a que le nom. On
-    retire donc la désignation (« Ville de », « Municipalité de »...) et les
-    articles, pour que « Ville de Sept-Îles » et « Sept-Îles » donnent la même
-    clé. On retire aussi le service que certains acheteurs ajoutent à leur
-    nom, comme dans « Ville de Joliette - Approvisionnement ».
+    « Ville de Sept-Îles » et « Sept-Îles » donnent « sept iles » : désignation,
+    articles du début et service ajouté par l'acheteur sont retirés.
     """
     cle = normaliser(nom)
     cle = re.sub(SERVICES, "", cle)
@@ -209,12 +141,9 @@ def cle_organisme(nom):
 
 
 def type_attendu(nom):
-    """Déduit du début du nom SEAO si l'on cherche une municipalité ou une MRC.
+    """« municipalité », « MRC ou communauté » ou None, d'après le début du nom SEAO.
 
-    Une fois la désignation retirée, « MRC de Montmagny » et « Ville de
-    Montmagny » donnent la même clé. Ce repère permet de choisir la bonne
-    correspondance plutôt que de déclarer le cas ambigu. Retourne None si le
-    nom ne commence par aucune désignation connue.
+    Sépare « MRC de Montmagny » de « Ville de Montmagny », qui ont la même clé.
     """
     debut = normaliser(nom)
     # « Comm. métropolitaine » : c'est ainsi que le répertoire écrit celle de Montréal.
@@ -229,10 +158,8 @@ def type_attendu(nom):
 def construire_index(municipalites, mrc, perimunicipaux):
     """Associe chaque clé de nom à la liste des organismes qui la portent.
 
-    Une clé partagée reste volontairement ambiguë : il existe par exemple deux
-    Saint-Donat au Québec. main() essaiera de départager (voir departager), et
-    signalera le cas s'il n'y arrive pas. Je préfère un programme qui dit
-    « je ne sais pas » à un programme qui devine.
+    Une clé partagée, comme celle des deux Saint-Donat, reste ambiguë : departager
+    tranche ensuite, ou le cas est signalé.
     """
     index = {}
 
@@ -242,16 +169,13 @@ def construire_index(municipalites, mrc, perimunicipaux):
     for ligne in mrc:
         index.setdefault(cle_organisme(ligne["mrcnom"]), []).append(("MRC ou communauté", ligne))
 
-    # Pour les organismes périmunicipaux, on ne garde que le nom et le code
-    # postal : le fichier XML ne donne ni population ni superficie.
+    # Le fichier XML ne donne que le nom et le code postal des organismes périmunicipaux.
     for organisme in perimunicipaux:
-        # Le ministère coupe les noms à 60 caractères, parfois au milieu d'un mot :
-        # la suite est dans NOM_L2. C'est le cas de 132 organismes sur 338.
+        # Les noms sont coupés à 60 caractères, la suite dans NOM_L2 (132 organismes sur 338).
         nom = ((organisme.findtext("NOM_L1") or "") + (organisme.findtext("NOM_L2") or "")).strip()
         if nom:
             entrees = index.setdefault(cle_organisme(nom), [])
-            # Le fichier du ministère liste certains organismes deux fois, comme la
-            # Société de transport de l'Outaouais : un même nom ne compte qu'une fois.
+            # Certains organismes sont listés deux fois, comme la Société de transport de l'Outaouais.
             if not any(t == "organisme périmunicipal" and e["nom"] == nom for t, e in entrees):
                 entrees.append(("organisme périmunicipal",
                                 {"nom": nom, "code_postal": organisme.findtext("COD_POST") or ""}))
@@ -260,13 +184,9 @@ def construire_index(municipalites, mrc, perimunicipaux):
 
 
 def construire_index_des_codes(municipalites, mrc):
-    """Associe chaque code géographique à sa municipalité ou à sa MRC.
+    """Associe chaque code géographique ou code de MRC à son organisme du répertoire.
 
-    Sert quand le code est déjà inscrit dans le contexte : rempli lors d'une
-    exécution précédente, ou saisi à la main pour régler un cas que le nom ne
-    permet pas de trancher. Les deux familles de codes ne se chevauchent pas :
-    cinq chiffres pour une municipalité, « AR » suivi de trois chiffres pour
-    une MRC.
+    Sert quand le code est déjà inscrit dans le contexte.
     """
     codes = {}
     for ligne in municipalites:
@@ -280,9 +200,7 @@ def construire_index_des_codes(municipalites, mrc):
 def sans_territoires_non_organises(correspondances):
     """Écarte les territoires non organisés quand un autre candidat porte le même nom.
 
-    Un territoire non organisé n'a pas de conseil et ne passe pas de contrats :
-    c'est la MRC qui l'administre. Quand une municipalité porte le même nom,
-    comme Rivière-Saint-Jean, l'acheteur est donc la municipalité.
+    Un territoire non organisé ne passe pas de contrats : c'est sa MRC qui l'administre.
     """
     organises = [c for c in correspondances if c[1].get("mdes") != "Territoire non organisé"]
     return organises or correspondances
@@ -298,11 +216,9 @@ def decrire(correspondance):
     return f"{ligne.get('nom')} (organisme périmunicipal)"
 
 
-# Désignations qui distinguent vraiment deux homonymes. « Municipalité » n'en fait
-# pas partie : le SEAO l'emploie aussi pour des paroisses, comme Sainte-Françoise
-# ou Saint-Isidore. On ne regarde que le début du nom (« Ville de… »,
-# « Municipalité du Canton de… »), et un mot suivi d'un trait d'union ne compte
-# pas : « Municipalité de Ville-Marie » ne désigne pas une ville.
+# Désignations qui départagent deux homonymes, lues au début du nom. « Municipalité »
+# n'en est pas une : le SEAO l'emploie aussi pour des paroisses, comme Sainte-Françoise.
+# Un mot suivi d'un trait d'union ne compte pas : « Ville-Marie » n'est pas une ville.
 DESIGNATION_DISTINCTIVE = re.compile(
     r"^(?:municipalite\s+(?:de\s+la\s+|du\s+|de\s+)?)?(canton|village|ville|paroisse)(?![-\w])")
 
@@ -322,15 +238,12 @@ def designation_au_debut(nom):
 
 
 def departager(nom, correspondances, codes_postaux):
-    """Choisit entre plusieurs municipalités homonymes, seulement si un indice les sépare.
+    """Choisit entre des municipalités homonymes, seulement si un indice publié les sépare.
 
-    Deux indices, dans cet ordre :
-      1. le code postal publié dans le SEAO, comparé à celui de l'hôtel de ville
-         dans le répertoire (mcodpos);
-      2. une désignation distinctive écrite au début du nom SEAO (voir
-         DESIGNATION_DISTINCTIVE), comparée à celle du répertoire (mdes).
-    Si les deux indices se contredisent, ou si aucun ne sépare les candidats, on
-    ne choisit pas. Retourne (correspondance, explication), ou (None, None).
+    Indices, dans l'ordre : le code postal du SEAO comparé à celui de l'hôtel de
+    ville (mcodpos), puis la désignation au début du nom comparée à mdes.
+    Retourne (correspondance, explication), ou (None, None) si les indices se
+    contredisent ou ne séparent rien.
     """
     if any(type_organisme != "municipalité" for type_organisme, _ in correspondances):
         return None, None
@@ -350,11 +263,7 @@ def departager(nom, correspondances, codes_postaux):
 
 
 def lire_codes_postaux_seao(dossier=DOSSIER_SORTIES):
-    """Retourne {identifiant d'acheteur : codes postaux publiés dans le SEAO}.
-
-    Le fichier de contexte ne contient pas d'adresse : on la reprend dans les
-    vues produites par analyser_seao.py, pour toutes les périodes analysées.
-    """
+    """Retourne {identifiant d'acheteur : codes postaux du SEAO}, lus dans sorties/*/a_enrichir.csv."""
     codes = {}
     for chemin in sorted(Path(dossier).glob("*/a_enrichir.csv")):
         with chemin.open(encoding="utf-8-sig", newline="") as fichier:
@@ -369,9 +278,7 @@ def lire_codes_postaux_seao(dossier=DOSSIER_SORTIES):
 # ---------------------------------------------------------------------------
 # Rapprochement tolérant
 # ---------------------------------------------------------------------------
-# Ces règles ne servent que lorsque le nom exact n'a rien trouvé : elles ne
-# peuvent donc pas défaire un rattachement existant. Elles rattrapent les
-# écarts d'écriture du SEAO, sans deviner.
+# Ces règles ne servent que si le nom exact n'a rien trouvé.
 
 # Petits mots retirés partout dans le nom : « Saint-Léon-Standon » et
 # « Saint-Léon-de-Standon » désignent le même lieu.
@@ -389,13 +296,11 @@ REGLES_A_CONFIRMER = (NOM_ALLONGE, NOM_RACCOURCI, NOM_APPROCHE)
 
 
 def tolerance(mot_a, mot_b):
-    """Nombre de fautes acceptées dans un mot, selon la longueur du plus court des deux.
+    """Fautes acceptées dans un mot : aucune jusqu'à 4 lettres, une jusqu'à 8, deux au-delà.
 
-    Une faute, c'est une lettre en trop, en moins ou remplacée, ou deux lettres
-    voisines inversées : « batiment » et « batimnet » sont à une faute l'un de
-    l'autre. Plus un mot est court, plus une faute risque d'en faire un autre
-    mot : Saint-Paul et Sainte-Paule sont deux municipalités. On n'accepte donc
-    aucune faute jusqu'à 4 lettres, une de 5 à 8 lettres, deux à partir de 9.
+    Une faute : une lettre en trop, en moins ou remplacée, ou deux lettres voisines
+    inversées. La longueur est celle du plus court des deux mots. Un mot court ne
+    tolère rien : Saint-Paul et Sainte-Paule sont deux municipalités.
     """
     longueur = min(len(mot_a), len(mot_b))
     return 0 if longueur <= 4 else 1 if longueur <= 8 else 2
@@ -425,10 +330,8 @@ def lire_nom_seao(nom):
     entre_parentheses = re.findall(r"\(([^)]*)\)", nom)
     mots = [ABREVIATIONS.get(mot, mot) for mot in normaliser(re.sub(r"\([^)]*\)", " ", nom)).split()]
 
-    # « M. » ou « Mun. » en tête veut dire Municipalité. Une faute dans ce mot,
-    # comme « Muncipalité », ne doit pas non plus empêcher de le reconnaître.
-    # Les autres désignations sont trop courtes pour y tolérer une faute :
-    # « Mille », dans Mille-Isles, n'est qu'à une lettre de « Ville ».
+    # « M. », « Mun. » ou une faute comme « Muncipalité » valent « Municipalité ». Les
+    # autres désignations sont trop courtes pour une faute : « Mille » est à une lettre de « Ville ».
     if mots and re.match(r"\s*(m|mun)\.\s", nom, re.IGNORECASE):
         mots[0] = "municipalite"
     elif mots and 0 < DamerauLevenshtein.distance(mots[0], "municipalite") <= tolerance(mots[0], "municipalite"):
@@ -454,11 +357,9 @@ def lire_nom_seao(nom):
 
 
 def construire_index_tolerant(index):
-    """Regroupe l'index sous des clés tolérantes : abréviations développées, déterminants retirés.
+    """Regroupe l'index sous des clés tolérantes, abréviations développées et déterminants retirés.
 
-    « Saint-Léon-de-Standon » y devient « saint leon standon ». Dans le
-    répertoire actuel, cela ne réunit que deux noms différents, Ange-Gardien et
-    L'Ange-Gardien, que la région permet ensuite de séparer.
+    « Saint-Léon-de-Standon » y devient « saint leon standon ».
     """
     tolerant = {}
     for cle, entrees in index.items():
@@ -485,11 +386,9 @@ def code_postal_de(correspondance):
 
 
 def nom_proche(mots, cle_officielle):
-    """Dit si un nom ne diffère du nom officiel que par des fautes de frappe tolérées.
+    """Vrai si le nom ne diffère du nom officiel que par des fautes tolérées, deux au plus.
 
-    Les deux noms doivent avoir le même nombre de mots. Chaque mot est comparé
-    au mot officiel de même rang, avec la tolérance de sa longueur, et le nom
-    entier ne peut pas compter plus de deux fautes.
+    Même nombre de mots; chaque mot est comparé à celui de même rang (voir tolerance).
     """
     officiels = cle_officielle.split()
     if len(officiels) != len(mots):
@@ -506,26 +405,17 @@ def nom_proche(mots, cle_officielle):
 def rapprocher(nom, index_tolerant, codes_postaux=frozenset()):
     """Cherche un organisme par une règle tolérante, quand le nom exact n'a rien donné.
 
-    Quatre règles, essayées dans l'ordre, de la plus sûre à la plus risquée :
-      1. le même nom écrit autrement : abréviation, déterminant oublié,
-         désignation mal placée, précision entre parenthèses;
-      2. le nom officiel suivi d'une précision : « Saint-Damase-de-Matapédia »
-         pour Saint-Damase, dans la MRC de La Matapédia;
-      3. le nom officiel raccourci : « Saint-Majorique » pour
-         Saint-Majorique-de-Grantham;
-      4. un nom approché : une faute de frappe ou deux lettres inversées, selon
-         la longueur du mot (voir tolerance).
+    Quatre règles, de la plus sûre à la plus risquée :
+      1. le même nom écrit autrement : abréviation, déterminant oublié, désignation
+         mal placée, précision entre parenthèses;
+      2. le nom officiel suivi d'une précision : « Saint-Damase-de-Matapédia »;
+      3. le nom officiel raccourci : « Saint-Majorique » pour Saint-Majorique-de-Grantham;
+      4. un nom approché, à une ou deux fautes près (voir tolerance).
+    Un candidat est retenu s'il est seul, ou désigné par un indice (désignation,
+    lieu, code postal), et si aucun indice ne le contredit. Les règles 2 à 4
+    exigent en plus un indice qui le confirme.
 
-    Les indices servent ensuite à choisir et à confirmer : la désignation, une
-    précision de lieu comparée à la région et à la MRC du candidat, et le code
-    postal. Un candidat n'est retenu que s'il est seul et qu'aucun indice ne le
-    contredit. Pour les règles 2 à 4, il faut en plus qu'un indice le confirme :
-    sur 36 907 fautes introduites exprès dans les noms du répertoire, cette
-    confirmation n'a laissé passer aucune mauvaise municipalité.
-
-    Retourne (correspondance, explication, candidats). La correspondance est
-    None quand rien n'est retenu; les candidats restent alors utiles pour la
-    vérification à la main.
+    Retourne (correspondance ou None, explication, candidats).
     """
     lecture = lire_nom_seao(nom)
     mots = lecture["mots"]
@@ -604,24 +494,18 @@ def rapprocher(nom, index_tolerant, codes_postaux=frozenset()):
 
 
 def rattacher(ligne, index, index_tolerant, par_code, codes_postaux):
-    """Trouve l'organisme du répertoire qui correspond à une ligne du contexte.
+    """Trouve l'organisme du répertoire d'une ligne du contexte.
 
-    Trois essais, dans l'ordre : le code géographique déjà inscrit dans la
-    ligne, le nom exact, puis les règles tolérantes (voir rapprocher).
-
-    Retourne (correspondance, méthode, échec). En cas de succès, la méthode est
-    le texte à noter dans la source, ou None quand le nom exact a suffi. Sinon,
-    échec vaut (genre, raison) : « ambigu » quand il y a des candidats mais
-    qu'on ne peut pas choisir, « absent » quand une municipalité ou une MRC
-    reste introuvable, « non municipal » quand le nom n'annonce ni l'une ni
-    l'autre et que le répertoire ne le connaît pas.
+    Essais : le code déjà inscrit, le nom exact, puis rapprocher. Retourne
+    (correspondance, méthode, échec) : la méthode est notée dans la source (None
+    si le nom exact a suffi); échec vaut (genre, raison), le genre étant
+    « ambigu », « absent » ou « non municipal ».
     """
     nom = ligne["organisme"]
     codes_ligne = set().union(*[codes_postaux.get(i.strip(), set())
                                 for i in (ligne.get("buyer_ids") or "").split("|")])
 
-    # 1. Un code déjà inscrit fait foi : il vient d'une exécution précédente, ou
-    # d'une saisie à la main pour un cas que le nom ne permettait pas de trancher.
+    # 1. Un code déjà inscrit fait foi : exécution précédente ou saisie à la main.
     code = (ligne.get("code_geographique") or "").strip()
     if code and code != A_COMPLETER:
         if code in par_code:
@@ -640,15 +524,13 @@ def rattacher(ligne, index, index_tolerant, par_code, codes_postaux):
             liste = " | ".join(decrire(c) for c in candidats[:5]) + (" | …" if len(candidats) > 5 else "")
             return None, None, ("ambigu", f"non retenu ({explication}) : {liste}")
         if type_attendu(nom) is None:
-            # Ni « Municipalité », ni « Ville », ni « MRC » : un office d'habitation, une
-            # société, une association... Le répertoire n'a rien à reporter pour lui.
+            # Ni municipalité ni MRC dans le nom : un office d'habitation, une société...
             return None, None, ("non municipal", "absent du répertoire, et le nom n'annonce ni municipalité ni MRC")
         return None, None, ("absent", "aucun organisme du répertoire ne porte ce nom")
 
-    # « MRC de Montmagny » et « Ville de Montmagny » ont la même clé : le
-    # début du nom dit laquelle on cherche. Si aucun organisme de ce type ne
-    # porte ce nom, on ne rattache pas : la Communauté métropolitaine de
-    # Montréal avait ainsi reçu, à tort, la population de la Ville de Montréal.
+    # Le début du nom dit si l'on cherche une municipalité ou une MRC. Sans organisme
+    # de ce type, on ne rattache pas : la Communauté métropolitaine de Montréal avait
+    # ainsi reçu, à tort, la population de la Ville de Montréal.
     attendu = type_attendu(nom)
     if attendu:
         du_bon_type = [c for c in correspondances if c[0] == attendu]
@@ -677,24 +559,17 @@ def rattacher(ligne, index, index_tolerant, par_code, codes_postaux):
 # ---------------------------------------------------------------------------
 
 def valeurs_municipalite(ligne, eau, source):
-    """Prépare les valeurs de contexte d'une municipalité du répertoire.
+    """Les valeurs de contexte d'une municipalité du répertoire.
 
-    Deux précisions pour bien lire le résultat :
-      - la superficie retenue est la superficie totale (msuperf), plans d'eau
-        compris. Le répertoire donne aussi la superficie terrestre (msupft),
-        qui n'est pas utilisée ici;
-      - classe_taille vient de la Stratégie d'économie d'eau potable : c'est la
-        classe de la population desservie par le réseau, pas celle de la
-        municipalité. Mont-Tremblant compte 12 026 habitants, mais elle est
-        classée « 5 000 à 9 999 personnes » parce que son réseau en dessert
-        8 151. Quand la Stratégie n'a pas de classe, elle inscrit « Aucune
-        donnée ».
+    La superficie est la superficie totale (msuperf), plans d'eau compris.
+    classe_taille est la classe de la population desservie par le réseau :
+    Mont-Tremblant (12 026 habitants) est classée « 5 000 à 9 999 personnes »,
+    car son réseau en dessert 8 151.
     """
     code = (ligne.get("mcode") or "").strip('"').strip()
     donnees_eau = eau.get(code, {})
 
-    # Les données sur l'eau tiennent dans une seule colonne de texte, facile à
-    # lire. Une valeur vide ou « NULL » est simplement omise.
+    # Les données sur l'eau, en une colonne de texte; une valeur vide ou « NULL » est omise.
     morceaux = []
     for etiquette, champ, unite in (("population desservie", "pop_desservie", ""),
                                     ("indice de fuites", "indice_fuites", ""),
@@ -704,10 +579,8 @@ def valeurs_municipalite(ligne, eau, source):
         if valeur not in (None, "", "NULL"):
             morceaux.append(f"{etiquette} {valeur}{unite}")
 
-    # Trois cas bien différents pour l'eau : des valeurs publiées; la
-    # municipalité publiée sans aucune valeur, ce qu'on dit tel quel; ou la
-    # municipalité absente des fichiers, et la case reste à compléter, car une
-    # prochaine édition de la Stratégie pourrait la contenir.
+    # Des valeurs publiées; la municipalité publiée sans valeur; ou absente des
+    # fichiers, et la case reste à compléter.
     if morceaux:
         eau_texte = "; ".join(morceaux)
     elif code in eau:
@@ -721,8 +594,7 @@ def valeurs_municipalite(ligne, eau, source):
         "classe_taille": donnees_eau.get("classe", ""),
         "superficie_km2": ligne.get("msuperf", ""),
         "region_administrative": ligne.get("regadm", ""),
-        # Une case MRC vide dans le répertoire n'est pas un oubli : Montréal,
-        # Laval ou Longueuil, par exemple, ne font partie d'aucune MRC.
+        # Case vide dans le répertoire : Montréal, Laval ou Longueuil ne font partie d'aucune MRC.
         "mrc": ligne.get("mrc") or HORS_MRC,
         "particularites_infrastructures": eau_texte,
         "source_contexte": source,
@@ -730,17 +602,11 @@ def valeurs_municipalite(ligne, eau, source):
 
 
 def valeurs_mrc(ligne, source):
-    """Prépare les valeurs de contexte d'une MRC ou d'une communauté métropolitaine.
+    """Les valeurs de contexte d'une MRC ou d'une communauté métropolitaine.
 
-    Le fichier des MRC a ses propres noms de colonnes (mrcpopul, mrcregion,
-    msupf), différents de ceux du fichier des municipalités. Il ne contient
-    rien sur l'eau.
-
-    Trois colonnes ne s'appliquent pas à une MRC : la MRC dont elle ferait
-    partie, et la classe de taille et les données sur l'eau, que la Stratégie
-    publie municipalité par municipalité. Elles reçoivent « Sans objet ». Une
-    communauté métropolitaine couvre plusieurs régions : le répertoire ne lui
-    en donne aucune, d'où « Sans objet » aussi.
+    La MRC, la classe de taille et les données sur l'eau ne s'appliquent pas à une
+    MRC : « Sans objet ». Une communauté métropolitaine n'a pas de région dans le
+    répertoire : « Sans objet » aussi.
     """
     return {
         "code_geographique": (ligne.get("mrccod") or "").strip(),
@@ -755,12 +621,10 @@ def valeurs_mrc(ligne, source):
 
 
 def remplir_ligne(ligne, valeurs):
-    """Reporte les valeurs trouvées dans les seules cases vides ou encore « À compléter ».
+    """Reporte les valeurs dans les seules cases vides ou « À compléter ».
 
-    C'est la règle la plus importante du programme : une valeur déjà présente,
-    saisie à la main ou lors d'une exécution précédente, n'est jamais remplacée,
-    même si le répertoire donne autre chose. Une valeur vide n'est pas reportée.
-    Retourne (cases remplies, valeurs déjà présentes laissées intactes).
+    Une valeur déjà présente n'est jamais remplacée, même si le répertoire dit
+    autre chose. Retourne (cases remplies, valeurs laissées intactes).
     """
     remplies, intactes = 0, 0
     for colonne, valeur in valeurs.items():
@@ -776,12 +640,9 @@ def remplir_ligne(ligne, valeurs):
 
 
 def vider_note(ligne):
-    """Une note encore « À compléter » devient une case vide.
+    """Vide une note restée « À compléter » et retourne True; une note écrite n'est pas touchée.
 
-    Les notes sont un champ libre, pas une donnée à trouver : une note vide
-    veut seulement dire qu'il n'y a rien à signaler. L'étiquette « À compléter »
-    y faisait croire qu'il manquait des centaines de valeurs. Une note écrite à
-    la main n'est jamais touchée. Retourne True si la note a été vidée.
+    Une note vide veut seulement dire qu'il n'y a rien à signaler.
     """
     if (ligne.get("notes") or "").strip() == A_COMPLETER:
         ligne["notes"] = ""
@@ -792,15 +653,9 @@ def vider_note(ligne):
 def construire_donnees_eau(fuites, validite, consommation):
     """Regroupe les trois fichiers de la Stratégie par code géographique.
 
-    Le fichier des fuites nomme sa colonne de code num_c, les deux autres
-    mun_c : c'est la même information. L'indice de fuites est coupé à cinq
-    caractères (0.56544245 devient 0.565) : c'est une troncature, pas un
-    arrondi.
-
-    Attention aux codes : dans les fichiers de validité et de consommation, le
-    zéro du début a disparu pour 89 municipalités (« 3005 » pour Gaspé, au lieu
-    de « 03005 »). On complète donc chaque code à cinq chiffres; sans cela, 28
-    organismes de l'est du Québec n'avaient que leur indice de fuites.
+    Le code s'appelle num_c dans le fichier des fuites, mun_c ailleurs. Il est
+    complété à cinq chiffres : la validité et la consommation écrivent « 3005 »
+    pour Gaspé. L'indice de fuites est tronqué à cinq caractères (0.565).
     """
     eau = {}
     for ligne in validite:
@@ -846,8 +701,7 @@ def main():
     codes_postaux = lire_codes_postaux_seao()
     print(f"  codes postaux SEAO lus pour {len(codes_postaux)} identifiants d'acheteur")
 
-    # Mention de provenance écrite dans chaque case remplie : quels fichiers,
-    # de quelle date, et quel jour le contexte a été complété.
+    # Provenance notée dans chaque case remplie : les fichiers, leur date, et le jour du remplissage.
     source = (f"Répertoire des municipalités du Québec (MAMH), fichier du {dates['municipalites']}"
               + (f"; Stratégie québécoise d'économie d'eau potable 2024 (MAMH), fichier du {dates['validite']}"
                  if "validite" in dates else "")
@@ -858,9 +712,8 @@ def main():
         colonnes = lecteur.fieldnames
         lignes = list(lecteur)
 
-    # remplis et rapproches comptent des organismes; deja_saisis compte des cases (voir remplir_ligne).
-    # ambigus et absents : les cas qu'il faut encore trancher à la main. sans_objet : les
-    # organismes non municipaux, pour lesquels le répertoire n'a rien à reporter.
+    # remplis et rapproches comptent des organismes, deja_saisis des cases. ambigus et absents
+    # restent à trancher à la main; sans_objet regroupe les organismes non municipaux.
     remplis, rapproches, deja_saisis, ambigus, absents, sans_objet = 0, 0, 0, [], [], []
     notes_videes = 0
 
@@ -873,8 +726,7 @@ def main():
                 (ligne["organisme"], raison))
             continue
 
-        # Quand le nom exact n'a pas suffi, la source dit comment l'organisme a
-        # été rattaché, pour qu'on puisse le vérifier.
+        # Si le nom exact n'a pas suffi, la source dit comment l'organisme a été rattaché.
         type_organisme, trouve = correspondance
         source_ligne = source + (f"; {methode}" if methode else "")
         if type_organisme == "municipalité":
@@ -894,8 +746,7 @@ def main():
             if methode and methode.startswith("nom rapproché"):
                 rapproches += 1
 
-    # Sauvegarde avant d'écrire, pour pouvoir revenir en arrière. Attention : il
-    # n'y en a qu'une, et elle est remplacée à chaque exécution.
+    # Une seule sauvegarde, remplacée à chaque exécution.
     DOSSIER_SORTIES.mkdir(exist_ok=True)
     shutil.copy2(CONTEXTE_CSV, DOSSIER_SORTIES / (CONTEXTE_CSV.name + ".bak"))
     with CONTEXTE_CSV.open("w", encoding="utf-8-sig", newline="") as fichier:

@@ -1,7 +1,6 @@
-"""Tests de completer_contexte.py : de petits cas fabriqués, inspirés de vrais homonymes.
+"""Tests de completer_contexte.py sur de petits cas inspirés de vrais homonymes et de vraies fautes.
 
-Ils ne lisent pas les vrais fichiers du ministère. Les fichiers créés pendant
-les tests vont dans des dossiers temporaires, jamais dans le projet.
+Ils ne lisent pas les fichiers du ministère; les fichiers écrits vont dans des dossiers temporaires.
 
 Commande : python -B -m unittest -v test_completer_contexte
 """
@@ -151,7 +150,7 @@ class LectureDuNomTests(unittest.TestCase):
         self.assertEqual(contexte.tolerance("paul", "paule"), 0)        # 4 lettres : aucune faute
         self.assertEqual(contexte.tolerance("simon", "simeon"), 1)      # 5 à 8 lettres : une faute
         self.assertEqual(contexte.tolerance("temiscamingue", "temiscaming"), 2)   # 9 lettres ou plus : deux
-        # L'exemple donné en rencontre : « batiment » et « batimnet », deux lettres inversées, une seule faute.
+        # « batiment » et « batimnet » : deux lettres inversées, une seule faute.
         self.assertTrue(contexte.nom_proche(["batimnet"], "batiment"))
         self.assertFalse(contexte.nom_proche(["batiment"], "batiment"))   # identique : ce n'est pas un nom approché
         self.assertFalse(contexte.nom_proche(["paul"], "paule"))          # mot trop court pour tolérer une faute
