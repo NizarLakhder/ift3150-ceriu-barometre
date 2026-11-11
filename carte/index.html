@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baromètre PGA-Eau</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="carte.css">
+</head>
+<body>
+  <div class="page">
+    <aside id="panneau">
+      <div class="intro">
+      <h1>Baromètre PGA-Eau</h1>
+      <p class="prototype">Prototype pour le CERIU. Carte produite le <span id="date-donnees"></span>.</p>
+
+      <p>Les municipalités du Québec doivent s'engager dans un plan de gestion des actifs en eau
+        (PGA-Eau) avant la fin de 2026. La carte montre celles dont on trouve une trace dans les
+        appels d'offres publiés au SEAO.</p>
+
+      <label for="recherche">Trouver une municipalité</label>
+      <input id="recherche" type="search" list="noms" autocomplete="off" placeholder="Ex. : Sept-Îles">
+      <datalist id="noms"></datalist>
+      <p id="message-recherche" class="discret" hidden></p>
+
+      <h2>Légende</h2>
+      <ul class="legende">
+        <li><span class="carre pga"></span><span><strong>PGA-Eau repéré</strong> (<span id="nb-pga"></span>)<br>
+          <span class="discret">un mandat pour préparer le plan, ou une étape du plan</span></span></li>
+        <li><span class="carre liee"></span><span><strong>Démarche liée</strong> (<span id="nb-liee"></span>)<br>
+          <span class="discret">plan d'intervention ou démarche voisine</span></span></li>
+        <li><span class="carre outil"></span><span><strong>Outil seulement</strong> (<span id="nb-outil"></span>)<br>
+          <span class="discret">un logiciel de gestion des actifs, sans démarche de plan</span></span></li>
+        <li><span class="carre aucune"></span><span><strong>Aucune trace</strong> (<span id="nb-aucune"></span>)<br>
+          <span class="discret">rien trouvé dans les exports lus</span></span></li>
+      </ul>
+      <p class="avertissement">Aucune trace ne veut pas dire pas de plan : beaucoup de mandats ne passent
+        jamais par le SEAO.</p>
+      </div>
+
+      <!-- Sur un téléphone, cette partie passe sous la carte (voir carte.css). -->
+      <div class="suite">
+      <h2>PGA-Eau repéré</h2>
+      <ul id="liste-pga" class="liste"></ul>
+      <h2>Démarche liée</h2>
+      <ul id="liste-liee" class="liste"></ul>
+      <h2>Outil seulement</h2>
+      <ul id="liste-outil" class="liste"></ul>
+
+      <p class="bas"><button id="ouvrir-a-propos" type="button" class="lien">À propos de cette carte</button></p>
+      </div>
+    </aside>
+
+    <main id="carte" aria-label="Carte des municipalités du Québec"></main>
+  </div>
+
+  <dialog id="a-propos">
+    <h2>À propos de cette carte</h2>
+
+    <h3>D'où viennent les données</h3>
+    <ul>
+      <li>Les appels d'offres et les contrats : exports du SEAO publiés sur Données Québec par le
+        Secrétariat du Conseil du trésor. Périodes lues : <span id="periodes"></span>.</li>
+      <li>La liste des municipalités et leur population : répertoire des municipalités du ministère des
+        Affaires municipales et de l'Habitation.</li>
+      <li>Les contours et l'adresse des sites web : découpages administratifs du ministère des
+        Ressources naturelles et des Forêts (licence CC-BY 4.0), version <span id="version-contours"></span>.</li>
+    </ul>
+
+    <h3>Comment les démarches sont repérées</h3>
+    <p>Un programme lit le titre de chaque fiche et propose les dossiers qui parlent de gestion des
+      actifs en eau. Chaque dossier proposé est ensuite lu et classé à la main.</p>
+
+    <h3>Ce que la carte ne dit pas</h3>
+    <ul>
+      <li>Un mandat dont le titre ne nomme pas le plan passe inaperçu.</li>
+      <li>Un mandat fait à l'interne, ou sous le seuil de publication, n'apparaît pas dans le SEAO.</li>
+      <li>Les démarches portées par une régie ou une MRC ne sont pas sur la carte :
+        <span id="hors-carte"></span>.</li>
+      <li>Les territoires autochtones et les territoires non organisés aquatiques ne sont pas dans le
+        répertoire des municipalités : ils ne sont pas coloriés.</li>
+    </ul>
+
+    <form method="dialog"><button type="submit">Fermer</button></form>
+  </dialog>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="donnees.js"></script>
+  <script src="carte.js"></script>
+</body>
+</html>
