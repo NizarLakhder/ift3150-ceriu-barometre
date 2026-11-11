@@ -422,17 +422,22 @@ LEFT JOIN seao.fiche_fichier ff ON ff.fichier_id = s.fichier_id
 GROUP BY s.fichier_id;
 
 -- L'état du PGA-Eau de chaque municipalité, d'après les démarches classées à la
--- main : PGA-Eau repéré (élaboration ou étape), démarche liée repérée, ou aucune
--- trace dans les exports chargés. Jamais « pas de plan » : une partie des
--- mandats ne passe pas par le SEAO.
+-- main : PGA-Eau repéré (élaboration ou étape), démarche liée repérée (plan
+-- d'intervention, démarche voisine...), outil seulement, ou aucune trace dans les
+-- exports chargés. Un logiciel de gestion d'actifs n'est pas une démarche de plan :
+-- il a son propre état. Jamais « pas de plan » : une partie des mandats ne passe
+-- pas par le SEAO.
 CREATE VIEW analyses.etat_pga_eau AS
 SELECT m.code_geographique, m.nom, m.designation, m.population, m.region_code, m.mrc_code,
        count(d.demarche_id) FILTER (WHERE d.classement IN ('elaboration', 'etape')) AS nb_dossiers_pga_eau,
-       count(d.demarche_id) FILTER (WHERE d.classement NOT IN ('elaboration', 'etape')) AS nb_dossiers_lies,
+       count(d.demarche_id) FILTER (WHERE d.classement NOT IN ('elaboration', 'etape', 'outil')) AS nb_dossiers_lies,
+       count(d.demarche_id) FILTER (WHERE d.classement = 'outil') AS nb_outils,
        max(coalesce(d.date_attribution, d.date_publication)) AS derniere_date,  -- l'attribution, à défaut la publication
        CASE WHEN count(d.demarche_id) FILTER (WHERE d.classement IN ('elaboration', 'etape')) > 0
                 THEN 'PGA-Eau repéré dans le SEAO'
-            WHEN count(d.demarche_id) > 0 THEN 'démarche liée repérée dans le SEAO'
+            WHEN count(d.demarche_id) FILTER (WHERE d.classement <> 'outil') > 0
+                THEN 'démarche liée repérée dans le SEAO'
+            WHEN count(d.demarche_id) > 0 THEN 'outil seulement repéré dans le SEAO'
             ELSE 'aucune trace dans les exports chargés' END AS etat
 FROM territoire.municipalite m
 LEFT JOIN organismes.organisme o ON o.code_geographique = m.code_geographique
