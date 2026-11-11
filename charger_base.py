@@ -31,6 +31,8 @@ import hashlib
 import json
 import os
 import re
+import sys
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -762,27 +764,89 @@ def fournisseurs_a_regrouper(connexion):
 # Vérifications
 # ---------------------------------------------------------------------------
 
-def verifier(connexion):
-    """Compare la base aux CSV d'analyser_seao.py, export par export.
+@dataclass
+class BilanValidation:
+    """Ce qui a réellement été comparé, et ce qui empêche de conclure."""
 
-    Pour chaque export : mêmes fiches municipales, même somme des montants
-    attribués, mêmes dossiers PGA-Eau, même repérage de la gestion des actifs
-    en eau. Retourne la liste des écarts; elle doit être vide.
+    exports_attendus: list[str] = field(default_factory=list)
+    exports_compares: list[str] = field(default_factory=list)
+    fichiers_absents: list[str] = field(default_factory=list)
+    erreurs_lecture: list[str] = field(default_factory=list)
+    ecarts: list[str] = field(default_factory=list)
+
+    @property
+    def code_sortie(self):
+        # Une erreur prime sur une comparaison manquante.
+        if self.erreurs_lecture or self.ecarts:
+            return 1
+        if (not self.exports_attendus or self.fichiers_absents
+                or self.exports_compares != self.exports_attendus):
+            return 2
+        return 0
+
+
+def lire_csv_de_verification(chemin):
+    """Refuse un CSV incomplet ou ambigu avant de calculer les comparaisons."""
+    requis = {"ocid", "release_id", "montant_attribue", "pga_eau", "gestion_actifs_eau"}
+    with chemin.open(encoding="utf-8-sig", newline="") as fichier:
+        lecteur = csv.DictReader(fichier, strict=True)
+        colonnes = lecteur.fieldnames or []
+        if not requis.issubset(colonnes) or len(colonnes) != len(set(colonnes)):
+            raise ValueError("en-têtes CSV absents, incomplets ou dupliqués")
+        details = list(lecteur)
+    cles = set()
+    for numero, ligne in enumerate(details, start=2):
+        if None in ligne or any(v is None for v in ligne.values()):
+            raise ValueError(f"ligne {numero} : nombre de cellules incorrect")
+        cle = (ligne["ocid"], ligne["release_id"])
+        if not all(v.strip() for v in cle):
+            raise ValueError(f"ligne {numero} : identifiant absent")
+        if cle in cles:
+            raise ValueError(f"ligne {numero} : identifiants dupliqués {cle}")
+        cles.add(cle)
+        if ligne["pga_eau"] not in ("oui", "non"):
+            raise ValueError(f"ligne {numero} : pga_eau doit valoir oui ou non")
+        if ligne["gestion_actifs_eau"]:
+            code_de("gestion_actifs_eau", ligne["gestion_actifs_eau"])
+        if ligne["montant_attribue"]:
+            try:
+                montant = Decimal(ligne["montant_attribue"])
+            except InvalidOperation as erreur:
+                raise ValueError(f"ligne {numero} : montant invalide") from erreur
+            if not montant.is_finite():
+                raise ValueError(f"ligne {numero} : montant non fini")
+    return details
+
+
+def verifier(connexion):
+    """Compare les exports chargés aux CSV : absence, erreur ou écart.
+
+    Une erreur SQL remonte à main pour annuler la transaction courante.
+    Une erreur de fichier est consignée pour poursuivre les autres CSV.
     """
-    ecarts = []
     exports = connexion.execute("SELECT fichier_id, nom FROM seao.fichier_source ORDER BY periode_fin, periode_debut").fetchall()
+    bilan = BilanValidation(exports_attendus=[nom for _, nom in exports])
     for fichier_id, nom in exports:
         details_csv = analyser_seao.noms_de_sortie(analyser_seao.DOSSIER_SEAO / nom)[0]
-        if not details_csv.exists():
+        try:
+            details = lire_csv_de_verification(details_csv)
+        except FileNotFoundError:
+            bilan.fichiers_absents.append(str(details_csv))
             print(f"  {nom} : {details_csv} absent, comparaison impossible (lancer analyser_seao.py)")
             continue
-        with details_csv.open(encoding="utf-8-sig", newline="") as fichier:
-            details = list(csv.DictReader(fichier))
+        except (OSError, UnicodeError, csv.Error, ValueError) as erreur:
+            message = f"{nom} : {details_csv} : {erreur}"
+            bilan.erreurs_lecture.append(message)
+            print(f"  CSV invalide ou illisible : {message}")
+            continue
         # Les fiches reliées à cet export, même celles qu'un autre export avait déjà apportées.
         lignes = connexion.execute(
             "SELECT d.ocid, f.release_id, c.pga_eau, c.gestion_actifs_eau FROM seao.fiche_fichier ff "
             "JOIN seao.fiche f ON f.fiche_id = ff.fiche_id JOIN seao.dossier d ON d.dossier_id = f.dossier_id "
             "LEFT JOIN analyses.fiche_classee c ON c.fiche_id = f.fiche_id WHERE ff.fichier_id = %s", (fichier_id,)).fetchall()
+        bilan.exports_compares.append(nom)
+        if any(pga is None for _, _, pga, _ in lignes):
+            bilan.ecarts.append(f"{nom} : classification absente en base")
         en_base = {(o, r) for o, r, _, _ in lignes}
         pga_base = {(o, r) for o, r, pga, _ in lignes if pga}
         gestion_base = {(o, r, g) for o, r, _, g in lignes if g is not None}
@@ -798,14 +862,14 @@ def verifier(connexion):
               f"contre {somme_csv:,.2f} $ dans le CSV | PGA-Eau {len(pga_base)} sur {len(pga_csv)} | "
               f"gestion des actifs en eau {len(gestion_base)} sur {len(gestion_csv)}")
         if en_base != cles:
-            ecarts.append(f"{nom} : fiches différentes")
+            bilan.ecarts.append(f"{nom} : fiches différentes")
         if abs(somme_base - somme_csv) > Decimal("0.01"):
-            ecarts.append(f"{nom} : somme des montants différente")
+            bilan.ecarts.append(f"{nom} : somme des montants différente")
         if pga_base != pga_csv:
-            ecarts.append(f"{nom} : dossiers PGA-Eau différents")
+            bilan.ecarts.append(f"{nom} : dossiers PGA-Eau différents")
         if gestion_base != gestion_csv:
-            ecarts.append(f"{nom} : repérage de la gestion des actifs en eau différent")
-    return ecarts
+            bilan.ecarts.append(f"{nom} : repérage de la gestion des actifs en eau différent")
+    return bilan
 
 
 # ---------------------------------------------------------------------------
@@ -826,6 +890,17 @@ def main():
                         help="efface les quatre schémas et recharge tout depuis les fichiers")
     args = parser.parse_args()
 
+    try:
+        return executer_chargement(args)
+    except Exception as erreur:
+        print(f"ÉCHEC : {type(erreur).__name__} : {erreur}", file=sys.stderr)
+        print("Certaines étapes peuvent déjà avoir été enregistrées par les commits précédents. "
+              "La transaction courante est annulée ; le chargement entier n'est pas annulé.", file=sys.stderr)
+        return 1
+
+
+def executer_chargement(args):
+    """Conserve les transactions existantes et retourne le code du bilan final."""
     with connecter() as connexion:
         if args.reinitialiser:
             connexion.execute("DROP SCHEMA IF EXISTS analyses, seao, organismes, territoire CASCADE")
@@ -853,8 +928,17 @@ def main():
         connexion.commit()
 
         print("\nVérifications :")
-        ecarts = verifier(connexion)
-        print("  Aucun écart avec les CSV." if not ecarts else "  ÉCARTS : " + "; ".join(ecarts))
+        bilan = verifier(connexion)
+        print(f"  Exports comparés : {len(bilan.exports_compares)}/{len(bilan.exports_attendus)}")
+        if bilan.code_sortie == 0:
+            print("  Validation complète : aucun écart avec les CSV.")
+        elif bilan.code_sortie == 1:
+            print("  ÉCHEC de la validation : " + "; ".join(bilan.ecarts + bilan.erreurs_lecture))
+        else:
+            print("  VÉRIFICATION INCOMPLÈTE : CSV absents ou aucun export disponible.")
+        if bilan.code_sortie != 0:
+            print("  Les étapes déjà validées par commit restent enregistrées. "
+                  "Ce bilan n'annule pas les imports.")
         a_classer = dossiers_a_classer(connexion)
         print(f"  Dossiers liés à la gestion des actifs en eau, à classer dans demarches.csv : {len(a_classer)}"
               + (" (" + ", ".join(a_classer) + ")" if a_classer else ""))
@@ -869,6 +953,8 @@ def main():
                       "seao.contrat", "seao.fournisseur", "seao.identifiant_fournisseur", "analyses.contrat_courant"):
             print(f"  {table:<28} {connexion.execute(f'SELECT count(*) FROM {table}').fetchone()[0]:>7}")
 
+        return bilan.code_sortie
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
