@@ -46,6 +46,8 @@ from barometre.configuration import ConfigurationInvalide
 from barometre.contexte.fichier import A_COMPLETER, COLONNES_CONTEXTE, ContexteInvalide, lire_contexte  # noqa: F401
 # Les conversions et l'écriture d'une table sont dans barometre/modele/ ; elles restent lisibles ici.
 from barometre.modele.conversions import code_mrc_de, entier, nombre, region_de, texte  # noqa: F401
+from barometre.modele.analyses import Demarche, FicheClassee
+from barometre.modele.organismes import Acheteur, Organisme
 from barometre.modele.table import inserer
 from barometre.modele.territoire import FichierReference, IndicateurEau, Mrc, Municipalite, Region
 from barometre.regles import regles
@@ -410,23 +412,20 @@ def charger_organismes(connexion):
             sorte = type_organisme(code, municipalites, mrc)
         except ValueError as erreur:
             raise ValueError(f"contexte_municipalites.csv, « {ligne['organisme']} » : {erreur}") from None
-        organismes.append({
-            "nom": ligne["organisme"], "type": sorte,
-            "code_geographique": code if sorte == "municipalite" else None,
-            "mrc_code": code if sorte == "mrc_ou_communaute" else None,
-            "type_milieu": texte(ligne["type_milieu"]), "source_contexte": texte(ligne["source_contexte"]),
-            "notes": texte(ligne["notes"]),
-        })
-    inserer(connexion, "organismes.organisme", organismes, "DO UPDATE", ["nom"])
+        organismes.append(Organisme(
+            nom=ligne["organisme"], type=sorte,
+            code_geographique=code if sorte == "municipalite" else None,
+            mrc_code=code if sorte == "mrc_ou_communaute" else None,
+            type_milieu=texte(ligne["type_milieu"]), source_contexte=texte(ligne["source_contexte"]),
+            notes=texte(ligne["notes"]),
+        ))
+    Organisme.inserer(connexion, organismes)
 
     ids = dict(connexion.execute("SELECT nom, organisme_id FROM organismes.organisme").fetchall())
-    acheteurs = [{"acheteur_id": i.strip(), "organisme_id": ids[ligne["organisme"]], "nom_seao": None}
+    acheteurs = [Acheteur(acheteur_id=i.strip(), organisme_id=ids[ligne["organisme"]], nom_seao=None)
                  for ligne in contexte for i in ligne["buyer_ids"].split("|") if i.strip()]
-    with connexion.cursor() as curseur:
-        curseur.executemany(
-            "INSERT INTO organismes.acheteur (acheteur_id, organisme_id, nom_seao) "
-            "VALUES (%(acheteur_id)s, %(organisme_id)s, %(nom_seao)s) "
-            "ON CONFLICT (acheteur_id) DO UPDATE SET organisme_id = EXCLUDED.organisme_id", acheteurs)
+    # Le contexte ne décide que de l'organisme : le nom publié (nom_seao) vient des exports.
+    Acheteur.inserer(connexion, acheteurs, mises_a_jour=("organisme_id",))
     return len(contexte), len(acheteurs)
 
 
@@ -615,12 +614,12 @@ def classer_fiches(connexion):
     for fiche_id, brut in connexion.execute("SELECT fiche_id, brut FROM seao.fiche"):
         ligne = analyser_seao.analyse_release(brut)
         famille = texte(ligne["gestion_actifs_eau"])
-        lignes.append({"fiche_id": fiche_id,
-                       "nature_transaction": code_de("nature_transaction", ligne["nature_transaction"]),
-                       "lie_eau": ligne["lie_eau"] == "oui", "pga_eau": ligne["pga_eau"] == "oui",
-                       "gestion_actifs_eau": code_de("gestion_actifs_eau", famille) if famille else None,
-                       "version_regles": version, "calcule_le": datetime.now(timezone.utc)})
-    inserer(connexion, "analyses.fiche_classee", lignes, "DO UPDATE", ["fiche_id"])
+        lignes.append(FicheClassee(fiche_id=fiche_id,
+                                   nature_transaction=code_de("nature_transaction", ligne["nature_transaction"]),
+                                   lie_eau=ligne["lie_eau"] == "oui", pga_eau=ligne["pga_eau"] == "oui",
+                                   gestion_actifs_eau=code_de("gestion_actifs_eau", famille) if famille else None,
+                                   version_regles=version, calcule_le=datetime.now(timezone.utc)))
+    FicheClassee.inserer(connexion, lignes)
     return len(lignes)
 
 
@@ -670,7 +669,7 @@ def charger_demarches(connexion):
             "JOIN seao.identifiant_fournisseur i ON i.identifiant = a.identifiant_fournisseur"):
         fournisseurs.setdefault(dossier_id, set()).add(fournisseur_id)
     connexion.execute("DELETE FROM analyses.demarche")
-    inserer(connexion, "analyses.demarche", [ligne_de_demarche(d, organismes, dossiers, fournisseurs) for d in demarches])
+    Demarche.inserer(connexion, [Demarche(**ligne_de_demarche(d, organismes, dossiers, fournisseurs)) for d in demarches])
     return len(demarches)
 
 
