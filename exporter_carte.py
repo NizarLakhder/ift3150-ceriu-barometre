@@ -20,7 +20,7 @@ from collections import Counter, defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
-from charger_base import connecter
+from barometre.chargement.base_de_donnees import connecter
 
 DOSSIER = Path(__file__).resolve().parent
 CONTOURS = DOSSIER / "donnees_reference" / "contours_municipalites.geojson"
