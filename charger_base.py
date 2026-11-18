@@ -651,9 +651,19 @@ def ordre_de_chargement(chemin):
 
 
 def version_des_regles():
-    """L'empreinte d'analyser_seao.py et d'utilitaires.py : elle change dès qu'une règle change."""
-    fichiers = [Path(analyser_seao.__file__), Path(analyser_seao.__file__).with_name("utilitaires.py")]
-    return "analyser_seao.py " + hashlib.sha256(b"".join(f.read_bytes() for f in fichiers)).hexdigest()[:12]
+    """L'empreinte du code qui classe les fiches : analyser_seao.py, utilitaires.py et barometre/.
+
+    Elle change dès qu'une règle change. Les fichiers sont pris dans l'ordre de leur chemin, chacun
+    précédé de ce chemin, et leurs fins de ligne sont ramenées à LF : la même version du code donne
+    la même empreinte sous Windows comme ailleurs.
+    """
+    racine = Path(analyser_seao.__file__).parent
+    fichiers = [racine / "analyser_seao.py", racine / "utilitaires.py", *(racine / "barometre").rglob("*.py")]
+    empreinte = hashlib.sha256()
+    for chemin in sorted(fichiers, key=lambda f: f.relative_to(racine).as_posix()):
+        empreinte.update(chemin.relative_to(racine).as_posix().encode("utf-8") + b"\0")
+        empreinte.update(chemin.read_bytes().replace(b"\r\n", b"\n") + b"\0")
+    return "regles " + empreinte.hexdigest()[:12]
 
 
 def classer_fiches(connexion):

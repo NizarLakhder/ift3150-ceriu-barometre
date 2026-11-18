@@ -1,6 +1,6 @@
 """
 Petites fonctions partagées : nettoyer un texte, lire une date, convertir un
-montant, écrire un CSV. Les règles du baromètre restent dans analyser_seao.py.
+montant, écrire un CSV. Les règles du baromètre sont dans barometre/regles.py.
 """
 
 import csv
