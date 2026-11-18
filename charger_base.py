@@ -42,6 +42,8 @@ from psycopg.types.json import Jsonb
 
 import analyser_seao
 import completer_contexte
+from barometre.configuration import ConfigurationInvalide
+from barometre.regles import regles
 from utilitaires import clean_org_name, clean_text, date_from_release_id, valid_date, write_csv
 
 SCHEMA_SQL = Path("schema.sql")
@@ -656,14 +658,20 @@ def ordre_de_chargement(chemin):
 
 
 def version_des_regles():
-    """L'empreinte du code qui classe les fiches : analyser_seao.py, utilitaires.py et barometre/.
+    """L'empreinte du code et du fichier qui classent les fiches.
 
-    Elle change dès qu'une règle change. Les fichiers sont pris dans l'ordre de leur chemin, chacun
-    précédé de ce chemin, et leurs fins de ligne sont ramenées à LF : la même version du code donne
-    la même empreinte sous Windows comme ailleurs.
+    Elle couvre trois fichiers nommés explicitement, analyser_seao.py, utilitaires.py et
+    config/regles_reperage.toml, et tous les modules de barometre/. S'il manque l'un des trois, elle
+    échoue plutôt que de calculer une empreinte sans lui. Elle change dès qu'une règle change. Les
+    fichiers sont pris dans l'ordre de leur chemin, chacun précédé de ce chemin, et leurs fins de ligne
+    sont ramenées à LF : la même version donne la même empreinte sous Windows comme ailleurs.
     """
     racine = Path(analyser_seao.__file__).parent
-    fichiers = [racine / "analyser_seao.py", racine / "utilitaires.py", *(racine / "barometre").rglob("*.py")]
+    explicites = [racine / "analyser_seao.py", racine / "utilitaires.py", racine / "config" / "regles_reperage.toml"]
+    manquants = [f.relative_to(racine).as_posix() for f in explicites if not f.is_file()]
+    if manquants:
+        raise FileNotFoundError(f"Version des règles impossible à calculer : {', '.join(manquants)} introuvable.")
+    fichiers = [*explicites, *(racine / "barometre").rglob("*.py")]
     empreinte = hashlib.sha256()
     for chemin in sorted(fichiers, key=lambda f: f.relative_to(racine).as_posix()):
         empreinte.update(chemin.relative_to(racine).as_posix().encode("utf-8") + b"\0")
@@ -904,6 +912,16 @@ def main():
     parser.add_argument("--reinitialiser", action="store_true",
                         help="efface les quatre schémas et recharge tout depuis les fichiers")
     args = parser.parse_args()
+
+    # Les règles d'abord, avant toute connexion : un fichier de règles invalide ne doit jamais arrêter
+    # un chargement à moitié fait.
+    try:
+        regles()
+    except ConfigurationInvalide as erreur:
+        print("ÉCHEC avant toute connexion : les règles de repérage sont invalides. Aucune connexion n'a été "
+              "ouverte et rien n'a été chargé.", file=sys.stderr)
+        print(erreur, file=sys.stderr)
+        return 1
 
     try:
         return executer_chargement(args)

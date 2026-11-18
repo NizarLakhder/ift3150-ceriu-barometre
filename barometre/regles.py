@@ -1,9 +1,15 @@
 """Les règles de repérage : type d'organisme, nature de la transaction, lien avec l'eau, PGA-Eau et
-gestion des actifs en eau. Elles ne lisent qu'un nom, un titre, une description ou des codes."""
+gestion des actifs en eau. Elles ne lisent qu'un nom, un titre, une description ou des codes.
+
+Les mots-clés et les motifs des trois règles liées à l'eau sont dans config/regles_reperage.toml, lu au
+premier usage par regles(). Ce module garde la préparation du texte, l'ordre des tests et les
+classements renvoyés. Le type d'organisme et la nature de la transaction restent écrits ici."""
 
 import re
 import unicodedata
+from functools import cache
 
+from barometre import configuration
 from utilitaires import clean_org_name
 
 
@@ -12,16 +18,14 @@ from utilitaires import clean_org_name
 UNSPSC_SUBVENTION = ("9315", "84101501", "99000000")
 
 
-# Mots liés à l'eau, en plus du mot « eau » que is_water_related cherche à part.
-# Ils servent surtout aux titres sans ce mot, comme « aqueduc » ou « égout ».
-MOTS_CLES_EAU = [
-    "pga-eau", "pga eau", "pga_eau",
-    "aqueduc", "égout", "egout", "eau potable", "eaux usées", "eaux usees",
-    "eaux pluviales", "pluvial", "assainissement", "usine de filtration",
-    "station d'épuration", "réseau d'eau", "borne d'incendie", "bornes d'incendie",
-    "borne-fontaine", "bornes-fontaines", "surpression", "pompage",
-    "compteur d'eau", "compteurs d'eau", "puits",
-]
+@cache
+def regles():
+    """Les règles de config/regles_reperage.toml, lues et validées au premier appel, puis gardées.
+
+    Lève configuration.ConfigurationInvalide si le fichier manque ou n'est pas valide. Un test qui
+    change de fichier vide ce cache avec regles.cache_clear().
+    """
+    return configuration.charger_regles()
 
 
 # ---------------------------------------------------------------------------
@@ -70,15 +74,16 @@ def get_nature(type_contrat, unspsc_id, titre):
 def is_water_related(titre, libelles):
     """Vrai si la fiche parle d'eau : un filet large, pas un repérage du PGA-Eau.
 
-    Réagit au mot entier « eau » ou « eaux » (pas à « réseau ») et aux mots de
-    MOTS_CLES_EAU, dans le titre ou les classifications. Une classification comme
+    Réagit au mot entier « eau » ou « eaux » (pas à « réseau ») et aux mots-clés de
+    [lie_eau], dans le titre ou les classifications. Une classification comme
     « Camion-citerne à eau pour la lutte contre les incendies » suffit.
     """
-    # Apostrophe courbe changée en droite, comme dans MOTS_CLES_EAU.
+    lie_eau = regles()["lie_eau"]
+    # Apostrophe courbe changée en droite, comme dans les mots-clés.
     text = f"{titre} {libelles}".lower().replace("’", "'")
-    if re.search(r"\beaux?\b", text):
+    if re.search(lie_eau["mot_eau"], text):
         return True
-    return any(k in text for k in MOTS_CLES_EAU)
+    return any(k in text for k in lie_eau["mots_cles"])
 
 
 def is_pga_eau(titre):
@@ -92,24 +97,17 @@ def is_pga_eau(titre):
     « PGA » et « eau » doivent être des mots entiers : « ACCOMPGANEMENT » ne
     compte pas, ni un « plan de gestion des eaux pluviales », faute d'« actif ».
     """
+    pga_eau = regles()["pga_eau"]
     t = titre.lower().replace("’", "'")
-    if re.search(r"\bpga[\W_]*eaux?\b", t):
+    if re.search(pga_eau["acronyme"], t):
         return True
-    return "gestion" in t and "actif" in t and re.search(r"\beaux?\b", t) is not None
+    return all(mot in t for mot in pga_eau["mots_requis"]) and re.search(pga_eau["mot_eau"], t) is not None
 
 
 def texte_de_recherche(texte):
     """Le texte en minuscules, sans accents, avec des apostrophes droites : « Égout » devient « egout »."""
     texte = (texte or "").replace("’", "'").replace("ʼ", "'")
     return unicodedata.normalize("NFD", texte).encode("ascii", "ignore").decode().lower()
-
-
-# Le repérage large de la gestion des actifs en eau. Les mots sont écrits sans accents.
-GESTION_ACTIFS = r"gestion (des|d'|de l')\s*actifs?"
-MOTS_RESEAUX_EAU = r"aqueduc|egout|eaux? potable|eaux? usee|conduite|pluvial|hydrauli|sanitaire|assainissement|tecq|\beaux?\b"
-# Les autres actifs attendront leur propre repérage : bâtiments, routes, véhicules...
-MOTS_AUTRES_ACTIFS = r"batiment|immeuble|immobili|vehicule|flotte|tennis|mobilier|transport"
-MOTS_ROUTES = r"routier|piirl|pisrmm|pavl|securite routiere"
 
 
 def gestion_actifs_eau(titre, description=""):
@@ -125,21 +123,23 @@ def gestion_actifs_eau(titre, description=""):
       - « plan d'intervention » : sur les réseaux d'eau, pas un plan routier (PIIRL);
       - « gestion d'actifs » : un plan de gestion des actifs des infrastructures
         qui ne dit pas « eau », comme celui de Clermont.
+    Les motifs sont ceux de [gestion_actifs_eau], plus l'acronyme de [pga_eau] ;
+    l'ordre des tests, lui, est fixé ici.
     """
+    gestion = regles()["gestion_actifs_eau"]
     t = texte_de_recherche(titre)
     texte = texte_de_recherche(f"{titre} {description}")
-    if is_pga_eau(titre) or re.search(r"\bpga[\W_]*eaux?\b", texte):
+    if is_pga_eau(titre) or re.search(regles()["pga_eau"]["acronyme"], texte):
         return "PGA-Eau"
-    if re.search(MOTS_AUTRES_ACTIFS, t):
+    if re.search(gestion["autres_actifs"], t):
         return ""
-    if re.search(GESTION_ACTIFS, t) and re.search(r"logiciel|licence|abonnement|solution|plateforme|progiciel", t):
+    if re.search(gestion["gestion_actifs"], t) and re.search(gestion["outil"], t):
         return "outil"
-    if (re.search(r"inspection|auscultation|portrait|inventaire", t)
-            and re.search(r"dans le cadre (du|de la|des|d'un|d'une)\b.*(\bpga\b|plans? d'intervention|plans? de gestion|"
-                          + GESTION_ACTIFS + ")", texte)):
+    if re.search(gestion["etape_actions"], t) and re.search(configuration.motif_etape(gestion), texte):
         return "étape"
-    if re.search(r"plans? d'intervention", t) and re.search(MOTS_RESEAUX_EAU, texte) and not re.search(MOTS_ROUTES, t):
+    if (re.search(gestion["plan_intervention"], t) and re.search(gestion["reseaux_eau"], texte)
+            and not re.search(gestion["routes"], t)):
         return "plan d'intervention"
-    if re.search(GESTION_ACTIFS, t) and re.search(r"infrastructure|ingenierie|\bpti\b|municipa|reseau", t):
+    if re.search(gestion["gestion_actifs"], t) and re.search(gestion["infrastructures"], t):
         return "gestion d'actifs"
     return ""

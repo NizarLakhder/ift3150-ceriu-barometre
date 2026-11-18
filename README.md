@@ -121,7 +121,8 @@ régénèrent.
 
 ## Lancer l'analyse
 
-Il faut Python 3.10 ou plus récent.
+Il faut Python 3.11 ou plus récent : les règles de repérage sont lues dans `config/regles_reperage.toml`
+avec `tomllib`, apparu avec Python 3.11.
 
 ```powershell
 pip install -r requirements.txt

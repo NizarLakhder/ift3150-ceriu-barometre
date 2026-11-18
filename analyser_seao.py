@@ -30,7 +30,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-# Tous les noms d'avant restent accessibles par analyser_seao : charger_base.py et les tests les utilisent.
+# Les fonctions et constantes déplacées restent accessibles par analyser_seao : charger_base.py et les tests
+# les utilisent. Les mots-clés des règles liées à l'eau sont dans config/regles_reperage.toml.
 from barometre.analyse.fiche import SEUIL_PRIX_UNITAIRE, analyse_release  # noqa: F401
 from barometre.analyse.organismes import aggregate_municipalities, count_suppliers, format_suppliers  # noqa: F401
 from barometre.analyse.qualite import build_quality_rows
@@ -38,9 +39,9 @@ from barometre.chemins import (ANCIENNE_VUE_CONTEXTE, CONTEXT_SOURCE_CSV, DOSSIE
                                JSON_FILE, noms_de_sortie, trouver_fichier_json)
 from barometre.contexte.fichier import (CONTEXT_FIELDS, append_context_rows, build_context_rows,  # noqa: F401
                                         load_context_source, merge_context_rows)
-from barometre.regles import (GESTION_ACTIFS, MOTS_AUTRES_ACTIFS, MOTS_CLES_EAU, MOTS_RESEAUX_EAU,  # noqa: F401
-                              MOTS_ROUTES, UNSPSC_SUBVENTION, gestion_actifs_eau, get_nature, is_pga_eau,
-                              is_water_related, org_type, texte_de_recherche)
+from barometre.configuration import ConfigurationInvalide
+from barometre.regles import (UNSPSC_SUBVENTION, gestion_actifs_eau, get_nature, is_pga_eau,  # noqa: F401
+                              is_water_related, org_type, regles, texte_de_recherche)
 from barometre.sources.seao import (get_amounts, get_categories, get_municipal_buyer_party,  # noqa: F401
                                     get_suppliers, validate_identifiers)
 from utilitaires import (clean_org_name, clean_text, date_from_release_id, format_money,  # noqa: F401
@@ -54,6 +55,12 @@ from utilitaires import (clean_org_name, clean_text, date_from_release_id, forma
 
 def main():
     """Analyse un export et écrit les quatre CSV. Rien n'est écrit avant la fin des vérifications."""
+    # Les règles d'abord : si leur fichier manque ou n'est pas valide, rien n'est lu ni écrit.
+    try:
+        regles()
+    except ConfigurationInvalide as erreur:
+        print(f"Erreur : règles de repérage invalides, rien n'a été lu ni écrit.\n{erreur}", file=sys.stderr)
+        return 1
     fichier_json = trouver_fichier_json(sys.argv[1]) if len(sys.argv) > 1 else JSON_FILE
     details_csv, summary_csv, context_csv, quality_csv = noms_de_sortie(fichier_json)
     DOSSIER_SORTIES.mkdir(exist_ok=True)
@@ -109,4 +116,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

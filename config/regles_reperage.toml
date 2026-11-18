@@ -1,0 +1,115 @@
+# Règles de repérage du baromètre : ce que l'on cherche dans les fiches du SEAO.
+#
+# Ce fichier ne contient que des valeurs. La préparation du texte, l'ordre des tests et les classements
+# renvoyés restent dans barometre/regles.py : les champs « preparation » les décrivent, mais les modifier
+# ne change rien au comportement.
+#
+# Il est lu et validé au premier usage d'une règle (barometre/configuration.py) : une clé manquante ou
+# inconnue, un motif vide ou invalide, un mot en majuscules ou avec une apostrophe courbe arrêtent le
+# programme avec un message qui dit quoi corriger.
+#
+# Après une modification : ajouter un exemple et un contre-exemple aux tests, lancer les tests, puis
+# relancer toute la chaîne (analyse des exports, chargement, carte) pour que les résultats suivent les
+# règles utilisées.
+
+version = 1
+
+
+# --------------------------------------------------------------------------------------------------
+# is_water_related : le filet large « lié à l'eau ».
+# --------------------------------------------------------------------------------------------------
+[lie_eau]
+champs_examines = ["titre", "libellés UNSPSC de la fiche (classification et codes additionnels)"]
+preparation = """\
+    Minuscules, et apostrophe courbe (’) changée en droite. Les accents sont gardés : les mots \
+    s'écrivent avec leurs accents, en minuscules."""
+source = """\
+    Le mot « eau » ou « eaux », pris comme mot entier, et des mots pour les titres qui ne le \
+    disent pas, comme « aqueduc » ou « égout ». Liste dressée pendant l'analyse des exports de \
+    2026 ; sa provenance détaillée reste à confirmer."""
+limites = """\
+    Volontairement trop large : 3 264 fiches municipales sur 28 611 (sept exports, 1er novembre \
+    2026). Une seule classification suffit, comme « Camion-citerne à eau pour la lutte contre \
+    les incendies ». Ce filet sert à savoir quoi lire en priorité ; il ne détecte pas les \
+    PGA-Eau."""
+
+# le mot « eau » ou « eaux », pris comme mot entier (pas « réseau »)
+mot_eau = '\beaux?\b'
+# cherchés tels quels dans le texte préparé
+mots_cles = [
+    "pga-eau", "pga eau", "pga_eau", "aqueduc", "égout", "egout", "eau potable", "eaux usées",
+    "eaux usees", "eaux pluviales", "pluvial", "assainissement", "usine de filtration",
+    "station d'épuration", "réseau d'eau", "borne d'incendie", "bornes d'incendie",
+    "borne-fontaine", "bornes-fontaines", "surpression", "pompage", "compteur d'eau",
+    "compteurs d'eau", "puits",
+]
+
+
+# --------------------------------------------------------------------------------------------------
+# is_pga_eau : la règle PGA-Eau.
+# --------------------------------------------------------------------------------------------------
+[pga_eau]
+champs_examines = ["titre"]
+preparation = "Minuscules, et apostrophe courbe (’) changée en droite. Les accents sont gardés."
+source = """\
+    Les formes relevées dans de vrais titres : « PGA-Eau » (Nicolet, Sept-Îles), « PGA – Eau » \
+    avec un tiret long (Windsor), et « plan de gestion des actifs en eau » sans l'acronyme \
+    (Mont-Tremblant, Crabtree)."""
+limites = """\
+    Le titre seulement : un mandat dont le titre ne nomme pas le plan passe inaperçu. Les \
+    dossiers retrouvés à la lecture avaient eux-mêmes été trouvés par leur titre : ce n'est pas \
+    un taux de détection. La règle attrape aussi des cas voisins, reclassés à la main dans \
+    demarches.csv."""
+
+# « PGA » puis « eau », quelle que soit la ponctuation ; repris par le test 1 du repérage large
+acronyme = '\bpga[\W_]*eaux?\b'
+# sans l'acronyme : ces mots et le mot « eau » doivent tous être dans le titre
+mots_requis = [
+    "gestion", "actif",
+]
+# le mot « eau » ou « eaux », pris comme mot entier (pas « réseau »)
+mot_eau = '\beaux?\b'
+
+
+# --------------------------------------------------------------------------------------------------
+# gestion_actifs_eau : le repérage large. Les six tests sont essayés dans cet ordre, fixé par le
+# code, et le premier qui répond l'emporte : 1 PGA-Eau, 2 autre actif (écarté), 3 outil, 4 étape, 5
+# plan d'intervention, 6 gestion d'actifs.
+# --------------------------------------------------------------------------------------------------
+[gestion_actifs_eau]
+champs_examines = ["titre", "description de l'avis, avec le titre (tests 1, 4 et 5)"]
+preparation = """\
+    Minuscules, accents retirés et apostrophes droites (texte_de_recherche : « Égout » devient « \
+    egout ») : les motifs s'écrivent donc sans accents. Le test 1 applique d'abord la règle \
+    PGA-Eau au titre, avec sa propre préparation (accents gardés), puis cherche l'acronyme de \
+    [pga_eau] dans le titre et la description préparés."""
+source = """\
+    Ajouté en octobre 2026 pour rattraper les démarches proches que la règle PGA-Eau ne nomme \
+    pas : plans d'intervention, plan de gestion de tous les actifs, logiciels. Motifs tirés de \
+    titres réels (Magog, Disraeli, Roberval, Clermont)."""
+limites = """\
+    Ce repérage propose seulement : chaque dossier est classé à la main dans demarches.csv. \
+    L'ordre des six tests compte, et il est fixé dans le code : l'écart des autres actifs (test \
+    2) passe avant tout le reste. Une inspection de routine, sans « dans le cadre d'un » plan, \
+    n'est pas retenue."""
+
+# tests 3 et 6, et l'un des cadres du test 4
+gestion_actifs = '''gestion (des|d'|de l')\s*actifs?'''
+# test 2 : un titre sur un autre actif est écarté
+autres_actifs = 'batiment|immeuble|immobili|vehicule|flotte|tennis|mobilier|transport'
+# test 3, avec gestion_actifs
+outil = 'logiciel|licence|abonnement|solution|plateforme|progiciel'
+# test 4 : l'action, dans le titre
+etape_actions = 'inspection|auscultation|portrait|inventaire'
+# test 4 : puis, dans le titre et la description, cette expression
+etape_expression = '''dans le cadre (du|de la|des|d'un|d'une)\b'''
+# test 4 : ... suivie de l'un de ces cadres, ou de gestion_actifs
+etape_cadres = ['\bpga\b', '''plans? d'intervention''', 'plans? de gestion']
+# test 5 : dans le titre
+plan_intervention = '''plans? d'intervention'''
+# test 5 : un mot de réseau d'eau, dans le titre et la description
+reseaux_eau = 'aqueduc|egout|eaux? potable|eaux? usee|conduite|pluvial|hydrauli|sanitaire|assainissement|tecq|\beaux?\b'
+# test 5 : aucun mot de route dans le titre
+routes = 'routier|piirl|pisrmm|pavl|securite routiere'
+# test 6, avec gestion_actifs
+infrastructures = 'infrastructure|ingenierie|\bpti\b|municipa|reseau'
