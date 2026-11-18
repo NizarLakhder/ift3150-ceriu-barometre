@@ -370,7 +370,12 @@ def inserer(connexion, table, lignes, conflit="DO NOTHING", cle=None):
 
 
 def noter_fichier_reference(connexion, chemin, description):
-    """Garde la trace d'un fichier de référence : sa date et son empreinte."""
+    """Garde la trace d'un fichier de référence : son empreinte, qui identifie la version chargée,
+    et la date du fichier sur le disque.
+
+    Cette date peut venir d'un téléchargement, d'une copie ou d'une extraction : elle ne prouve
+    ni la publication, ni le téléchargement, ni la dernière modification du contenu.
+    """
     inserer(connexion, "territoire.fichier_reference", [{
         "nom": chemin.name, "description": description,
         "date_fichier": datetime.fromtimestamp(chemin.stat().st_mtime).date(),

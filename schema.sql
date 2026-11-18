@@ -44,7 +44,7 @@ CREATE TABLE territoire.fichier_reference (
     fichier_reference_id  integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,  -- numéro attribué par la base
     nom                   text NOT NULL UNIQUE,               -- nom du fichier, comme « MUN.csv »
     description           text NOT NULL,                      -- ce que contient le fichier, et où le trouver
-    date_fichier          date NOT NULL,                      -- date du fichier sur le disque, donc de son téléchargement
+    date_fichier          date NOT NULL,                      -- date du fichier sur le disque : elle ne prouve ni sa publication, ni son téléchargement, ni la dernière modification de son contenu
     empreinte_sha256      text NOT NULL,                      -- empreinte SHA-256 du contenu
     charge_le             timestamptz NOT NULL DEFAULT now()  -- moment du chargement
 );
