@@ -1,11 +1,13 @@
 """Les deux tables des organismes : les organismes du contexte et leurs identifiants d'acheteur.
 
-charger_base.py calcule les valeurs (type d'organisme, numéros) et garde ses contrôles ; ces classes
-décrivent les lignes et les écrivent.
+Le chargement (barometre/chargement/organismes.py) lit le contexte et garde ses contrôles ;
+type_organisme décide du type d'un organisme d'après le répertoire ; ces classes décrivent les lignes
+et les écrivent.
 """
 
 from dataclasses import dataclass
 
+from barometre.modele.conversions import texte
 from barometre.modele.table import Table, genere
 
 
@@ -41,3 +43,18 @@ class Acheteur(Table):
     acheteur_id: str        # « OP-… »
     organisme_id: int
     nom_seao: str | None    # le nom publié dans le SEAO
+
+
+def type_organisme(code, municipalites, mrc):
+    """Le type d'un organisme d'après son code, cherché dans le répertoire.
+
+    Un code absent du répertoire lève ValueError : il n'est pas deviné d'après sa forme.
+    """
+    code = texte(code)
+    if code is None:
+        return "non_municipal"
+    if code in municipalites:
+        return "municipalite"
+    if code in mrc:
+        return "mrc_ou_communaute"
+    raise ValueError(f"le code {code} n'est ni une municipalité ni une MRC du répertoire.")

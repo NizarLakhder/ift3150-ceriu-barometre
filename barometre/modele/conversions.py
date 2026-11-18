@@ -4,9 +4,11 @@ Sans base de données. charger_base.py les réexporte ; test_charger_base.py les
 """
 
 import re
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from barometre.contexte.fichier import A_COMPLETER
+from utilitaires import valid_date
 
 
 def texte(valeur):
@@ -48,3 +50,39 @@ def code_mrc_de(libelle, prefixe="AR"):
     """
     m = re.search(r"\((\d{3})\)\s*$", libelle or "")
     return prefixe + m.group(1) if m else None
+
+
+def instant(valeur):
+    """Une date ISO du SEAO en date et heure, ou None si elle est absente ou fictive (« 0001-01-01 »)."""
+    valeur = texte(valeur)
+    if valeur is None or not valid_date(valeur):
+        return None
+    try:
+        return datetime.fromisoformat(valeur)
+    except ValueError:
+        return None
+
+
+# Libellés d'analyser_seao.py et de demarches.csv, et leur code dans les types
+# énumérés de schema.sql. Un libellé absent arrête le chargement.
+CODES = {
+    "nature_transaction": {"achat": "achat", "subvention ou contribution": "subvention_ou_contribution",
+                           "vente d'immeuble": "vente_immeuble", "partenariat": "partenariat"},
+    "gestion_actifs_eau": {"PGA-Eau": "pga_eau", "outil": "outil", "étape": "etape",
+                           "plan d'intervention": "plan_intervention", "gestion d'actifs": "gestion_actifs"},
+    "plan": {"PGA-Eau": "pga_eau"},
+    "classement": {"élaboration": "elaboration", "étape": "etape", "plan d'intervention": "plan_intervention",
+                   "plan de gestion des actifs": "plan_gestion_actifs", "démarche voisine": "demarche_voisine",
+                   "outil": "outil"},
+    "etat": {"mandat attribué": "mandat_attribue", "appel d'offres en cours": "appel_offres_en_cours",
+             "appel d'offres annulé": "appel_offres_annule", "plan adopté": "plan_adopte", "plan publié": "plan_publie"},
+}
+
+
+def code_de(colonne, libelle):
+    """Le code que la base donne à un libellé : « mandat attribué » devient « mandat_attribue »."""
+    try:
+        return CODES[colonne][libelle]
+    except KeyError:
+        raise ValueError(f"« {libelle} » n'est pas une valeur permise pour {colonne} : "
+                         + ", ".join(f"« {l} »" for l in CODES[colonne]) + ".") from None

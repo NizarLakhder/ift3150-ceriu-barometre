@@ -1,5 +1,9 @@
-"""La lecture d'une fiche du SEAO (format OCDS) : acheteur, fournisseurs retenus, identifiants, montants
-et catégories. Ces fonctions lisent la fiche sans rien décider."""
+"""La lecture d'un export du SEAO (format OCDS) : son nom (type et période), puis, pour chaque fiche,
+l'acheteur, les fournisseurs retenus, les identifiants, les montants et les catégories. Ces fonctions
+lisent sans rien décider."""
+
+import re
+from datetime import datetime
 
 from utilitaires import clean_text, safe_float
 
@@ -151,3 +155,26 @@ def get_categories(release):
         "unspsc_segment": unspsc_ids[0][:2] if unspsc_ids else "",
         "unspsc_additionnels": " | ".join(extras),
     }
+
+
+# ---------------------------------------------------------------------------
+# L'export : son nom et l'ordre de chargement
+# ---------------------------------------------------------------------------
+
+def decrire_export(nom_fichier):
+    """« hebdo_20260907_20260913.json » donne ("hebdomadaire", 7 septembre 2026, 13 septembre 2026).
+
+    Le type et la période d'un export ne sont écrits que dans son nom : un nom
+    d'une autre forme arrête le chargement.
+    """
+    m = re.fullmatch(r"(hebdo|mensuel)_(\d{8})_(\d{8})\.json", nom_fichier)
+    if not m:
+        raise ValueError(f"{nom_fichier} : nom d'export inattendu, il devrait ressembler à hebdo_20260907_20260913.json.")
+    debut, fin = (datetime.strptime(d, "%Y%m%d").date() for d in m.group(2, 3))
+    return ("hebdomadaire" if m.group(1) == "hebdo" else "mensuel"), debut, fin
+
+
+def ordre_de_chargement(chemin):
+    """Les exports se chargent dans l'ordre de leur période, pour que le dernier nom lu soit le plus récent."""
+    _, debut, fin = decrire_export(chemin.name)
+    return fin, debut, chemin.name

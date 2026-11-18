@@ -1,4 +1,5 @@
-"""Les dossiers et les fichiers que lit ou écrit l'analyse, relatifs au dossier courant (la racine du projet)."""
+"""Les dossiers et les fichiers que lisent ou écrivent l'analyse et le chargement, relatifs au dossier
+courant (la racine du projet)."""
 
 from pathlib import Path
 
@@ -14,6 +15,11 @@ CONTEXT_SOURCE_CSV = Path("contexte_municipalites.csv")
 ANCIENNE_VUE_CONTEXTE = DOSSIER_SORTIES / "municipalites_a_enrichir.csv"
 # Les cas que completer_contexte.py n'a pas pu rattacher au répertoire.
 A_VERIFIER_CSV = DOSSIER_SORTIES / "contexte_a_verifier.csv"
+# Ce que lit le chargement, et les entreprises du même nom à vérifier qu'il écrit.
+SCHEMA_SQL = Path("schema.sql")
+REGROUPEMENTS_CSV = Path("regroupements.csv")
+DEMARCHES_CSV = Path("demarches.csv")
+A_REGROUPER_CSV = DOSSIER_SORTIES / "fournisseurs_a_regrouper.csv"
 
 
 def trouver_fichier_json(nom):

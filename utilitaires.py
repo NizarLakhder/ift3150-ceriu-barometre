@@ -1,9 +1,11 @@
 """
 Petites fonctions partagées : nettoyer un texte, lire une date, convertir un
-montant, écrire un CSV. Les règles du baromètre sont dans barometre/regles.py.
+montant, écrire un CSV, calculer l'empreinte d'un fichier. Les règles du baromètre
+sont dans barometre/regles.py.
 """
 
 import csv
+import hashlib
 import re
 
 
@@ -99,3 +101,16 @@ def write_csv(path, rows):
         writer = csv.DictWriter(file, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
+
+
+# ---------------------------------------------------------------------------
+# Fichiers
+# ---------------------------------------------------------------------------
+
+def empreinte(chemin):
+    """L'empreinte SHA-256 d'un fichier."""
+    calcul = hashlib.sha256()
+    with open(chemin, "rb") as fichier:
+        for bloc in iter(lambda: fichier.read(1 << 20), b""):
+            calcul.update(bloc)
+    return calcul.hexdigest()

@@ -506,7 +506,7 @@ class ProgrammesTests(Dossier):
         """Lance charger_base.main avec un contexte mal formé ; connecter() échouerait s'il était appelé."""
         self.ecrire(brut(ENTETE, cellules(13)))
         connecter = MagicMock(side_effect=AssertionError("une connexion a été ouverte"))
-        with patch.object(completer_contexte, "CONTEXTE_CSV", self.contexte), \
+        with patch.object(charger_base, "CONTEXT_SOURCE_CSV", self.contexte), \
                 patch.object(charger_base, "connecter", connecter), \
                 patch.object(charger_base.sys, "argv", ["charger_base.py", *options]), \
                 redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()) as erreurs:

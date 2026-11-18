@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 from psycopg.types.json import Jsonb
 
 import charger_base
-import completer_contexte
+from barometre.chargement import organismes as chargement_organismes
 from barometre.modele.analyses import Demarche, FicheClassee
 from barometre.modele.organismes import Acheteur, Organisme
 from barometre.modele.seao import (Attribution, Classification, Contrat, Dossier, Fiche, FicheClassification, FicheFichier,
@@ -260,7 +260,7 @@ class OrganismesEtAnalysesTests(unittest.TestCase):
                 return resultat
             connexion = MagicMock()
             connexion.execute.side_effect = reponse
-            with patch.object(completer_contexte, "CONTEXTE_CSV", chemin):
+            with patch.object(chargement_organismes, "CONTEXT_SOURCE_CSV", chemin):
                 self.assertEqual(charger_base.charger_organismes(connexion), (1, 2))
         appels = [a.args for a in connexion.cursor.return_value.__enter__.return_value.executemany.call_args_list]
         ((requete, valeurs),) = [a for a in appels if a[0].startswith("INSERT INTO organismes.acheteur")]

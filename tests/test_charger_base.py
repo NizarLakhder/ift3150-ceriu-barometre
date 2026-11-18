@@ -17,6 +17,7 @@ from datetime import date
 from decimal import Decimal
 
 import charger_base as base
+from barometre.chargement import verification
 
 # Cas réel, raccourci : le dossier PGA-Eau de Matagami, semaine du 7 septembre 2026.
 MATAGAMI = {
@@ -257,7 +258,7 @@ class VerificationFinaleTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.racine = Path(self.temp.name)
-        self.sorties = patch.object(base.analyser_seao, "noms_de_sortie",
+        self.sorties = patch.object(verification, "noms_de_sortie",
                                     side_effect=lambda chemin: (self.racine / (chemin.stem + ".csv"),))
         self.sorties.start()
         self.addCleanup(self.sorties.stop)
