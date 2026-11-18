@@ -23,15 +23,21 @@ Les codes postaux du SEAO sont lus dans sorties/<export>/a_enrichir.csv :
 lancer analyser_seao.py avant. Le contexte est copié dans
 sorties/contexte_municipalites.csv.bak avant d'être réécrit.
 
+Codes de sortie : 0 si tout s'est bien passé ; 1 si le contexte ou un fichier
+obligatoire manque, si le contexte est mal formé, ou si sa réécriture n'a pas
+abouti (le message dit alors ce qui est en place).
+
 Lancement : python completer_contexte.py
 """
 
+import sys
 import xml.etree.ElementTree as ET
 from datetime import date
 
 from barometre.chemins import A_VERIFIER_CSV, CONTEXT_SOURCE_CSV, DOSSIER_SORTIES
 from barometre.contexte.fichier import (A_COMPLETER, AUCUNE_DONNEE, HORS_MRC, SANS_OBJET,  # noqa: F401
-                                        ecrire_cas_a_verifier, lire_codes_postaux_seao, lire_contexte,
+                                        COLONNES_CONTEXTE, ContexteInvalide, EcritureEchouee,
+                                        controler_contexte, ecrire_cas_a_verifier, lire_codes_postaux_seao,
                                         reecrire_contexte)
 from barometre.contexte.noms import (DESIGNATION_DISTINCTIVE, DESIGNATIONS, SERVICES, cle_organisme,  # noqa: F401
                                      construire_index, construire_index_des_codes, decrire, departager,
@@ -54,16 +60,19 @@ CONTEXTE_CSV = CONTEXT_SOURCE_CSV
 # ---------------------------------------------------------------------------
 
 def main():
-    """Remplit les cases « À compléter » du contexte, puis liste les cas à traiter à la main."""
+    """Remplit les cases « À compléter » du contexte, puis liste les cas à traiter à la main.
+
+    Retourne le code de sortie : 0, ou 1 en cas de problème (voir la docstring du module).
+    """
     if not CONTEXTE_CSV.exists():
         print(f"Erreur : {CONTEXTE_CSV} introuvable. Lancer d'abord analyser_seao.py.")
-        return
+        return 1
 
     print(f"Lecture des fichiers de référence dans {DOSSIER_SOURCES} :")
     contenus, dates = lire_fichiers()
     if contenus is None:
         print("\nIl manque un fichier obligatoire. Rien n'a été modifié.")
-        return
+        return 1
 
     municipalites = lire_csv(contenus["municipalites"])
     mrc = lire_csv(contenus["mrc"]) if "mrc" in contenus else []
@@ -85,7 +94,13 @@ def main():
                  if "validite" in dates else "")
               + f"; contexte rempli le {date.today().isoformat()}")
 
-    colonnes, lignes = lire_contexte(CONTEXTE_CSV)
+    # Les octets lus ici servent aussi à vérifier, juste avant le remplacement, que le fichier n'a pas changé.
+    avant = CONTEXTE_CSV.read_bytes()
+    try:
+        colonnes, lignes = controler_contexte(avant, CONTEXTE_CSV, COLONNES_CONTEXTE)
+    except ContexteInvalide as erreur:
+        print(f"\nErreur : {erreur}\nRien n'a été modifié.")
+        return 1
 
     # remplis et rapproches comptent des organismes, deja_saisis des cases. ambigus et absents
     # restent à trancher à la main; sans_objet regroupe les organismes non municipaux.
@@ -121,7 +136,12 @@ def main():
             if methode and methode.startswith("nom rapproché"):
                 rapproches += 1
 
-    reecrire_contexte(CONTEXTE_CSV, colonnes, lignes, DOSSIER_SORTIES)
+    try:
+        reecrire_contexte(CONTEXTE_CSV, colonnes, lignes, DOSSIER_SORTIES, avant)
+    except EcritureEchouee as erreur:
+        # Arrêt immédiat, même si le nouveau contexte est déjà en place : le message dit ce qui l'est.
+        print(f"\nErreur : {erreur}\nArrêt : {A_VERIFIER_CSV} n'a pas été mis à jour.")
+        return 1
     ecrire_cas_a_verifier(A_VERIFIER_CSV, ambigus + absents, sans_objet)
 
     print(f"\nOrganismes dans le contexte         : {len(lignes)}")
@@ -137,7 +157,8 @@ def main():
     print(f"\n{CONTEXTE_CSV} mis à jour (sauvegarde dans {DOSSIER_SORTIES / (CONTEXTE_CSV.name + '.bak')})")
     print(f"{A_VERIFIER_CSV} liste les cas à traiter à la main.")
     print("Le type de milieu reste à documenter : aucun de ces fichiers ne le fournit.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

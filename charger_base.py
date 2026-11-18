@@ -43,7 +43,7 @@ from psycopg.types.json import Jsonb
 import analyser_seao
 import completer_contexte
 from barometre.configuration import ConfigurationInvalide
-from barometre.contexte.fichier import lire_contexte
+from barometre.contexte.fichier import COLONNES_CONTEXTE, ContexteInvalide, lire_contexte
 from barometre.regles import regles
 from utilitaires import clean_org_name, clean_text, date_from_release_id, valid_date, write_csv
 
@@ -470,7 +470,7 @@ def charger_organismes(connexion):
 
     Le fichier fait foi : il met à jour les organismes déjà en base. « À compléter » devient NULL.
     """
-    _, contexte = lire_contexte(completer_contexte.CONTEXTE_CSV)
+    _, contexte = lire_contexte(completer_contexte.CONTEXTE_CSV, COLONNES_CONTEXTE)
     municipalites = {c for (c,) in connexion.execute("SELECT code_geographique FROM territoire.municipalite")}
     mrc = {c for (c,) in connexion.execute("SELECT code FROM territoire.mrc")}
 
@@ -920,6 +920,15 @@ def main():
     except ConfigurationInvalide as erreur:
         print("ÉCHEC avant toute connexion : les règles de repérage sont invalides. Aucune connexion n'a été "
               "ouverte et rien n'a été chargé.", file=sys.stderr)
+        print(erreur, file=sys.stderr)
+        return 1
+
+    # Le contexte aussi : sinon, --reinitialiser effacerait la base avant de découvrir l'erreur.
+    try:
+        lire_contexte(completer_contexte.CONTEXTE_CSV, COLONNES_CONTEXTE)
+    except (ContexteInvalide, OSError) as erreur:
+        print("ÉCHEC avant toute connexion : le fichier de contexte est illisible ou mal formé. Aucune "
+              "connexion n'a été ouverte et rien n'a été chargé.", file=sys.stderr)
         print(erreur, file=sys.stderr)
         return 1
 

@@ -37,8 +37,9 @@ from barometre.analyse.organismes import aggregate_municipalities, count_supplie
 from barometre.analyse.qualite import build_quality_rows
 from barometre.chemins import (ANCIENNE_VUE_CONTEXTE, CONTEXT_SOURCE_CSV, DOSSIER_SEAO, DOSSIER_SORTIES,  # noqa: F401
                                JSON_FILE, noms_de_sortie, trouver_fichier_json)
-from barometre.contexte.fichier import (CONTEXT_FIELDS, append_context_rows, build_context_rows,  # noqa: F401
-                                        load_context_source, merge_context_rows)
+from barometre.contexte.fichier import (CONTEXT_FIELDS, ContexteInvalide, EcritureEchouee,  # noqa: F401
+                                        append_context_rows, build_context_rows, load_context_source,
+                                        merge_context_rows)
 from barometre.configuration import ConfigurationInvalide
 from barometre.regles import (UNSPSC_SUBVENTION, gestion_actifs_eau, get_nature, is_pga_eau,  # noqa: F401
                               is_water_related, org_type, regles, texte_de_recherche)
@@ -93,12 +94,21 @@ def main():
     summaries = aggregate_municipalities(details, supplier_names_by_id)
     context_rows = build_context_rows(summaries, details)
     quality_rows = build_quality_rows(details, supplier_names_by_id)
-    context_source = load_context_source(CONTEXT_SOURCE_CSV, ANCIENNE_VUE_CONTEXTE, context_rows)
+    try:
+        context_source = load_context_source(CONTEXT_SOURCE_CSV, ANCIENNE_VUE_CONTEXTE, context_rows)
+    except ContexteInvalide as erreur:
+        print(f"Erreur : {erreur}\nRien n'a été écrit.", file=sys.stderr)
+        return 1
     nouveaux = []
     context_rows = merge_context_rows(context_rows, context_source, absents=nouveaux)
 
     # Les vérifications ont réussi : on peut écrire.
-    ajoutes = append_context_rows(CONTEXT_SOURCE_CSV, nouveaux)
+    try:
+        ajoutes = append_context_rows(CONTEXT_SOURCE_CSV, nouveaux)
+    except EcritureEchouee as erreur:
+        # Arrêt immédiat, même si les organismes nouveaux sont déjà ajoutés : le message dit ce qui l'est.
+        print(f"Erreur : {erreur}\nArrêt : aucun des quatre CSV n'a été écrit.", file=sys.stderr)
+        return 1
     details_csv.parent.mkdir(exist_ok=True)
     write_csv(details_csv, details)
     write_csv(summary_csv, summaries)

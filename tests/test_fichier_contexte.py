@@ -11,7 +11,7 @@ from pathlib import Path
 from barometre.contexte.fichier import lire_contexte, reecrire_contexte
 
 COLONNES = ["organisme", "buyer_ids", "population", "notes", "colonne_a_la_main"]
-CONTENU = ("﻿" + ",".join(COLONNES) + "\r\n"
+CONTENU = ("\ufeff" + ",".join(COLONNES) + "\r\n"
            + '"Ville de Saint-Léon-de-Standon, secteur ""est""",11 | 12,À compléter,,ajoutée à la main\r\n'
            + 'Municipalité de Lac-Mégantic,13,5 932,"note sur\r\ndeux lignes",\r\n').encode("utf-8")
 
@@ -43,13 +43,14 @@ class FichierContexteTests(unittest.TestCase):
         self.assertEqual(relues[0]["population"], "1 234")
         self.assertEqual(relues[0]["colonne_a_la_main"], "ajoutée à la main")
 
-        # Une écriture qui échoue en cours de route : la sauvegarde du fichier d'avant est déjà faite.
+        # Une écriture qui échoue : le fichier et la sauvegarde précédente restent tels quels.
         avant = self.chemin.read_bytes()
         self.assertNotEqual(avant, CONTENU)
         lignes[0]["colonne_inconnue"] = "x"
         with self.assertRaises(ValueError):
             reecrire_contexte(self.chemin, colonnes, lignes, self.sauvegardes)
-        self.assertEqual((self.sauvegardes / "contexte.csv.bak").read_bytes(), avant)
+        self.assertEqual(self.chemin.read_bytes(), avant)
+        self.assertEqual((self.sauvegardes / "contexte.csv.bak").read_bytes(), CONTENU)
 
 
 if __name__ == "__main__":
