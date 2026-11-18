@@ -44,11 +44,12 @@ import analyser_seao
 import completer_contexte
 from barometre.configuration import ConfigurationInvalide
 from barometre.contexte.fichier import A_COMPLETER, COLONNES_CONTEXTE, ContexteInvalide, lire_contexte  # noqa: F401
-# Les conversions et l'écriture d'une table sont dans barometre/modele/ ; elles restent lisibles ici.
+# Les conversions sont dans barometre/modele/ ; elles restent lisibles ici.
 from barometre.modele.conversions import code_mrc_de, entier, nombre, region_de, texte  # noqa: F401
 from barometre.modele.analyses import Demarche, FicheClassee
 from barometre.modele.organismes import Acheteur, Organisme
-from barometre.modele.table import inserer
+from barometre.modele.seao import (Attribution, Classification, Contrat, Dossier, Fiche, FicheClassification, FicheFichier,
+                                   FichierSource, Fournisseur, IdentifiantFournisseur, Nomenclature, Soumissionnaire)
 from barometre.modele.territoire import FichierReference, IndicateurEau, Mrc, Municipalite, Region
 from barometre.regles import regles
 from utilitaires import clean_org_name, clean_text, date_from_release_id, valid_date, write_csv
@@ -455,22 +456,13 @@ def charger_fournisseurs(connexion, lus):
     par_neq = dict(connexion.execute("SELECT neq, fournisseur_id FROM seao.fournisseur WHERE neq IS NOT NULL").fetchall())
     a_creer, rattaches, a_mettre_a_jour = regrouper_fournisseurs(lus, connus, par_neq)
     colonnes = ("nom", "neq", "adresse", "localite", "region", "code_postal", "pays")
-    with connexion.cursor() as curseur:
-        if a_creer:
-            # La base attribue les numéros : on les lit dans l'ordre des entreprises envoyées.
-            curseur.executemany(f"INSERT INTO seao.fournisseur ({', '.join(colonnes)}) "
-                                f"VALUES ({', '.join('%(' + c + ')s' for c in colonnes)}) RETURNING fournisseur_id",
-                                [{c: g["infos"][c] for c in colonnes} for g in a_creer], returning=True)
-            numeros = []
-            while True:
-                numeros.append(curseur.fetchone()[0])
-                if not curseur.nextset():
-                    break
-            rattaches += [(i, numero) for g, numero in zip(a_creer, numeros) for i in g["identifiants"]]
-        if rattaches:
-            curseur.executemany("INSERT INTO seao.identifiant_fournisseur (identifiant, fournisseur_id) VALUES (%s, %s)",
-                                rattaches)
-        if a_mettre_a_jour:
+    # La base attribue les numéros : on les lit dans l'ordre des entreprises envoyées.
+    numeros = Fournisseur.inserer_et_numeroter(connexion, [Fournisseur(**{c: g["infos"][c] for c in colonnes})
+                                                           for g in a_creer])
+    rattaches += [(i, numero) for g, numero in zip(a_creer, numeros) for i in g["identifiants"]]
+    IdentifiantFournisseur.inserer(connexion, [IdentifiantFournisseur(identifiant=i, fournisseur_id=f) for i, f in rattaches])
+    if a_mettre_a_jour:
+        with connexion.cursor() as curseur:
             curseur.executemany(
                 "UPDATE seao.fournisseur SET nom = %(nom)s, "
                 + ", ".join(f"{c} = coalesce(%({c})s, {c})" for c in colonnes if c != "nom")
@@ -509,10 +501,9 @@ def charger_export(connexion, chemin):
     municipales = sorted((lignes_de_la_fiche(r) for r in releases if analyser_seao.get_municipal_buyer_party(r)),
                          key=lambda n: n["fiche"]["release_id"])
 
-    fichier_id = connexion.execute(
-        "INSERT INTO seao.fichier_source (nom, type, periode_debut, periode_fin, date_publication, empreinte_sha256, nb_fiches) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING fichier_id",
-        (chemin.name, type_fichier, debut, fin, instant(donnees.get("publishedDate")), signature, len(releases))).fetchone()[0]
+    (fichier_id,) = FichierSource.inserer_et_numeroter(connexion, [FichierSource(
+        nom=chemin.name, type=type_fichier, periode_debut=debut, periode_fin=fin,
+        date_publication=instant(donnees.get("publishedDate")), empreinte_sha256=signature, nb_fiches=len(releases))])
 
     deja = cles_des_fiches(connexion)
     nouvelles = [n for n in municipales if (n["ocid"], n["fiche"]["release_id"]) not in deja]
@@ -526,9 +517,9 @@ def charger_export(connexion, chemin):
         return [ligne for n in nouvelles for ligne in n[cle]]
 
     # Listes de codes, fournisseurs et acheteurs d'abord : les fiches s'y réfèrent.
-    inserer(connexion, "seao.nomenclature", list({n["code"]: n for n in toutes("nomenclature")}.values()))
-    inserer(connexion, "seao.classification",
-            list({c["code"]: {"code": c["code"], "libelle": c["libelle"]} for c in toutes("classifications")}.values()))
+    Nomenclature.inserer(connexion, [Nomenclature(**n) for n in {n["code"]: n for n in toutes("nomenclature")}.values()])
+    Classification.inserer(connexion, list({c["code"]: Classification(code=c["code"], libelle=c["libelle"])
+                                            for c in toutes("classifications")}.values()))
     charger_fournisseurs(connexion, toutes("fournisseurs"))
 
     # Les acheteurs : chaque identifiant publié est rattaché à son organisme (voir organisme_de).
@@ -536,36 +527,34 @@ def charger_export(connexion, chemin):
     connus = dict(connexion.execute("SELECT acheteur_id, organisme_id FROM organismes.acheteur").fetchall())
     acheteurs = {n["acheteur"]["acheteur_id"]: n["acheteur"] for n in nouvelles}
     rattaches = {i: organisme_de(i, a["organisme"], connus, organismes) for i, a in acheteurs.items()}
-    with connexion.cursor() as curseur:
-        curseur.executemany(
-            "INSERT INTO organismes.acheteur (acheteur_id, organisme_id, nom_seao) VALUES (%s, %s, %s) "
-            "ON CONFLICT (acheteur_id) DO UPDATE SET nom_seao = EXCLUDED.nom_seao",
-            [(i, rattaches[i], a["nom_seao"]) for i, a in acheteurs.items()])
+    # Un export ne décide que du nom publié : l'organisme d'un identifiant connu ne change pas.
+    Acheteur.inserer(connexion, [Acheteur(acheteur_id=i, organisme_id=rattaches[i], nom_seao=a["nom_seao"])
+                                 for i, a in acheteurs.items()], mises_a_jour=("nom_seao",))
 
     # Les dossiers, puis les fiches : la base leur donne leur numéro.
-    inserer(connexion, "seao.dossier", [{"ocid": o} for o in dict.fromkeys(n["ocid"] for n in nouvelles)])
+    Dossier.inserer(connexion, [Dossier(ocid=o) for o in dict.fromkeys(n["ocid"] for n in nouvelles)])
     dossiers = dict(connexion.execute("SELECT ocid, dossier_id FROM seao.dossier").fetchall())
-    inserer(connexion, "seao.fiche", [{"dossier_id": dossiers[n["ocid"]], **n["fiche"]} for n in nouvelles])
+    Fiche.inserer(connexion, [Fiche(dossier_id=dossiers[n["ocid"]], **n["fiche"]) for n in nouvelles])
     fiches = cles_des_fiches(connexion)
 
     classifications, soumissionnaires, attributions = [], [], []
     for n in nouvelles:
         fiche_id = fiches[(n["ocid"], n["fiche"]["release_id"])]
-        classifications += [{"fiche_id": fiche_id, "code": c["code"], "principale": c["principale"]}
+        classifications += [FicheClassification(fiche_id=fiche_id, code=c["code"], principale=c["principale"])
                             for c in n["classifications"]]
-        soumissionnaires += [{"fiche_id": fiche_id, "identifiant_fournisseur": i} for i in n["soumissionnaires"]]
-        attributions += [{"fiche_id": fiche_id, **a} for a in n["attributions"]]
-    inserer(connexion, "seao.fiche_classification", classifications)
-    inserer(connexion, "seao.soumissionnaire", soumissionnaires)
-    inserer(connexion, "seao.attribution", attributions)
+        soumissionnaires += [Soumissionnaire(fiche_id=fiche_id, identifiant_fournisseur=i) for i in n["soumissionnaires"]]
+        attributions += [Attribution(fiche_id=fiche_id, **a) for a in n["attributions"]]
+    FicheClassification.inserer(connexion, classifications)
+    Soumissionnaire.inserer(connexion, soumissionnaires)
+    Attribution.inserer(connexion, attributions)
 
     # Un contrat renvoie à son attribution par le numéro que la base a donné à celle-ci.
     numeros = {(f, numero): a for f, numero, a in connexion.execute(
         "SELECT fiche_id, numero, attribution_id FROM seao.attribution WHERE fiche_id = ANY(%s)",
         ([fiches[(n["ocid"], n["fiche"]["release_id"])] for n in nouvelles],))}
-    inserer(connexion, "seao.contrat", [
-        {"attribution_id": numeros[(fiches[(n["ocid"], n["fiche"]["release_id"])], c["numero_attribution"])],
-         **{k: v for k, v in c.items() if k != "numero_attribution"}}
+    Contrat.inserer(connexion, [
+        Contrat(attribution_id=numeros[(fiches[(n["ocid"], n["fiche"]["release_id"])], c["numero_attribution"])],
+                **{k: v for k, v in c.items() if k != "numero_attribution"})
         for n in nouvelles for c in n["contrats"]])
 
     # Chaque fiche de l'export est reliée au fichier, avec sa version si elle diffère.
@@ -573,10 +562,10 @@ def charger_export(connexion, chemin):
     for n in municipales:
         fiche_id = fiches[(n["ocid"], n["fiche"]["release_id"])]
         autrement = fiche_id in gardees and not meme_contenu(gardees[fiche_id], n["fiche"]["brut"].obj)
-        liens.append({"fiche_id": fiche_id, "fichier_id": fichier_id,
-                      "version_publiee": n["fiche"]["brut"] if autrement else None})
-    inserer(connexion, "seao.fiche_fichier", liens)
-    return len(municipales), len(nouvelles), sum(1 for l in liens if l["version_publiee"] is not None)
+        liens.append(FicheFichier(fiche_id=fiche_id, fichier_id=fichier_id,
+                                  version_publiee=n["fiche"]["brut"] if autrement else None))
+    FicheFichier.inserer(connexion, liens)
+    return len(municipales), len(nouvelles), sum(1 for l in liens if l.version_publiee is not None)
 
 
 def ordre_de_chargement(chemin):
