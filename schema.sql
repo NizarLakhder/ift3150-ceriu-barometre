@@ -17,7 +17,7 @@
 -- orthographe, nos catégories prennent un code court sans accent.
 --
 -- charger_base.py applique ce fichier à une base vide. Après une modification,
--- « python charger_base.py --reinitialiser » efface tout et recharge.
+-- « python charger_base.py --reinitialiser » efface les quatre schémas et recharge.
 
 CREATE EXTENSION IF NOT EXISTS unaccent;   -- chercher sans tenir compte des accents
 CREATE EXTENSION IF NOT EXISTS pg_trgm;    -- chercher des noms proches

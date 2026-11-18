@@ -25,7 +25,7 @@ def preparer_schemas(connexion, reinitialiser):
     """
     if reinitialiser:
         connexion.execute("DROP SCHEMA IF EXISTS analyses, seao, organismes, territoire CASCADE")
-        print("Base effacée.")
+        print("Schémas du projet effacés.")
     if connexion.execute("SELECT to_regnamespace('seao')").fetchone()[0] is None:
         connexion.execute(SCHEMA_SQL.read_text(encoding="utf-8"))
-        print("Base créée à partir de schema.sql.")
+        print("Schémas et tables créés à partir de schema.sql.")

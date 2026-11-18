@@ -1,9 +1,10 @@
 """Les tables du SEAO : les exports chargés, les fiches et ce qu'elles publient, les fournisseurs.
 
-charger_base.py lit les exports, regroupe les fournisseurs et garde ses contrôles ; ces classes décrivent
-les lignes et les écrivent. Comme avant, une ligne déjà en base est gardée telle quelle (DO NOTHING), sauf
-pour les exports, les fournisseurs et leurs identifiants : un doublon y arrête l'export (CONFLIT = None).
-Seules ces deux premières tables rendent les numéros que la base leur donne (NUMERO).
+Le chargement (barometre/chargement/exports.py et fournisseurs.py) lit les exports, regroupe les
+fournisseurs et garde ses contrôles ; ces classes décrivent les lignes et les écrivent. Comme avant, une
+ligne déjà en base est gardée telle quelle (DO NOTHING), sauf pour les exports, les fournisseurs et leurs
+identifiants : un doublon y arrête l'export (CONFLIT = None). Seules ces deux premières tables rendent les
+numéros que la base leur donne (NUMERO).
 """
 
 from dataclasses import dataclass

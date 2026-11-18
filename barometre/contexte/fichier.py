@@ -2,7 +2,7 @@
 
 Pour l'analyse : la vue à enrichir, le rattachement de la saisie aux organismes de l'export, et
 l'ajout des organismes nouveaux à la fin. Pour completer_contexte.py : la lecture, la réécriture
-après sauvegarde, et la liste des cas à vérifier. Pour charger_base.py : la lecture.
+après sauvegarde, et la liste des cas à vérifier. Pour le chargement : la lecture.
 
 Toute lecture passe par controler_contexte, toute écriture qui remplace le fichier par
 remplacer_fichier : il n'est jamais laissé à moitié écrit. Une seule écriture à la fois : rien

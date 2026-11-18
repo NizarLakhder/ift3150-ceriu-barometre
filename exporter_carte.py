@@ -233,6 +233,7 @@ def ecrire(donnees, chemin):
 
 
 def main():
+    """Lit la base et les contours (téléchargés s'ils manquent), écrit carte/donnees.js et affiche le bilan."""
     parser = argparse.ArgumentParser(description="Prépare les données de la carte du baromètre (carte/donnees.js).")
     parser.add_argument("--contours-a-jour", action="store_true",
                         help="télécharge de nouveau les contours des municipalités")

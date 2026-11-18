@@ -1,7 +1,8 @@
 """Les cinq tables du territoire : fichiers de référence, régions, MRC, municipalités, indicateurs d'eau.
 
 Une classe par table du schéma territoire de schema.sql, et la lecture d'une ligne du répertoire du
-MAMH. charger_base.py décide quand écrire et dans quelle transaction ; ses contrôles restent chez lui.
+MAMH. Le chargement (barometre/chargement/territoire.py) décide quoi écrire et garde ses contrôles ;
+charger_base.py décide des transactions.
 """
 
 from dataclasses import dataclass

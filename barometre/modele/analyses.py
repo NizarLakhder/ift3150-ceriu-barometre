@@ -1,7 +1,7 @@
 """Les deux tables des analyses : le classement de chaque fiche et les démarches classées à la main.
 
-charger_base.py calcule les valeurs (règles de repérage, codes permis, dossiers et fournisseurs) et
-garde ses contrôles ; ces classes décrivent les lignes et les écrivent.
+Le chargement (barometre/chargement/analyses.py) calcule les valeurs (règles de repérage, codes
+permis, dossiers et fournisseurs) et garde ses contrôles ; ces classes décrivent les lignes et les écrivent.
 """
 
 from dataclasses import dataclass

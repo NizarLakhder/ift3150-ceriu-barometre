@@ -2,10 +2,10 @@
 
 Une classe de table décrit une table de schema.sql (tests/test_modele.py le vérifie) et sait l'écrire.
 Elle ne contrôle pas les données : ses annotations décrivent les colonnes, sans rien vérifier ; les
-contrôles restent dans charger_base.py et dans la base. Seule la demande d'écriture est vérifiée, avant
-toute requête : le mode de conflit, les colonnes à mettre à jour (verifier_mises_a_jour) et la colonne
-des numéros rendus (verifier_numero). Elle n'ouvre jamais de connexion et ne valide jamais de
-transaction : elle écrit dans celle de l'appelant.
+contrôles restent dans le chargement (barometre/chargement/) et dans la base. Seule la demande
+d'écriture est vérifiée, avant toute requête : le mode de conflit, les colonnes à mettre à jour
+(verifier_mises_a_jour) et la colonne des numéros rendus (verifier_numero). Elle n'ouvre jamais de
+connexion et ne valide jamais de transaction : elle écrit dans celle de l'appelant.
 """
 
 from dataclasses import field, fields

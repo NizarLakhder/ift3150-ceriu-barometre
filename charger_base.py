@@ -22,7 +22,7 @@ Le mot de passe est lu dans pgpass.conf, jamais dans le projet.
 
 Utilisation :
     python charger_base.py                  # charge ce qui manque, puis vérifie
-    python charger_base.py --reinitialiser  # efface tout et recharge, après une modification de schema.sql
+    python charger_base.py --reinitialiser  # efface les quatre schémas et recharge, après une modification de schema.sql
 """
 
 import argparse
@@ -53,6 +53,10 @@ from utilitaires import empreinte, write_csv  # noqa: F401
 
 
 def main():
+    """Vérifie les règles et le contexte avant toute connexion, puis charge ; rend le code de sortie.
+
+    0 : tout concorde avec les CSV ; 1 : échec ou écart ; 2 : vérification incomplète (CSV absents).
+    """
     parser = argparse.ArgumentParser(description="Charge le SEAO, le répertoire et le contexte dans PostgreSQL.")
     parser.add_argument("--reinitialiser", action="store_true",
                         help="efface les quatre schémas et recharge tout depuis les fichiers")
