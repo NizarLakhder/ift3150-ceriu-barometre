@@ -43,7 +43,11 @@ from psycopg.types.json import Jsonb
 import analyser_seao
 import completer_contexte
 from barometre.configuration import ConfigurationInvalide
-from barometre.contexte.fichier import COLONNES_CONTEXTE, ContexteInvalide, lire_contexte
+from barometre.contexte.fichier import A_COMPLETER, COLONNES_CONTEXTE, ContexteInvalide, lire_contexte  # noqa: F401
+# Les conversions et l'écriture d'une table sont dans barometre/modele/ ; elles restent lisibles ici.
+from barometre.modele.conversions import code_mrc_de, entier, nombre, region_de, texte  # noqa: F401
+from barometre.modele.table import inserer
+from barometre.modele.territoire import FichierReference, IndicateurEau, Mrc, Municipalite, Region
 from barometre.regles import regles
 from utilitaires import clean_org_name, clean_text, date_from_release_id, valid_date, write_csv
 
@@ -51,7 +55,6 @@ SCHEMA_SQL = Path("schema.sql")
 REGROUPEMENTS_CSV = Path("regroupements.csv")
 DEMARCHES_CSV = Path("demarches.csv")
 A_REGROUPER_CSV = analyser_seao.DOSSIER_SORTIES / "fournisseurs_a_regrouper.csv"
-A_COMPLETER = "À compléter"
 
 # Libellés d'analyser_seao.py et de demarches.csv, et leur code dans les types
 # énumérés de schema.sql. Un libellé absent arrête le chargement.
@@ -73,31 +76,6 @@ CODES = {
 # Conversions sans base de données, vérifiées par test_charger_base.py
 # ---------------------------------------------------------------------------
 
-def texte(valeur):
-    """Un texte nettoyé, ou None : « À compléter », « NULL » et le vide deviennent None."""
-    valeur = (valeur or "").strip() if isinstance(valeur, str) else valeur
-    if valeur in (None, "", "NULL", A_COMPLETER):
-        return None
-    return valeur
-
-
-def nombre(valeur):
-    """Un nombre exact (Decimal), ou None : 77061.99 reste exactement 77061.99."""
-    valeur = texte(valeur if isinstance(valeur, str) else (None if valeur is None else str(valeur)))
-    if valeur is None:
-        return None
-    try:
-        return Decimal(valeur)
-    except InvalidOperation:
-        return None
-
-
-def entier(valeur):
-    """Un entier, ou None."""
-    n = nombre(valeur)
-    return int(n) if n is not None else None
-
-
 def instant(valeur):
     """Une date ISO du SEAO en date et heure, ou None si elle est absente ou fictive (« 0001-01-01 »)."""
     valeur = texte(valeur)
@@ -107,22 +85,6 @@ def instant(valeur):
         return datetime.fromisoformat(valeur)
     except ValueError:
         return None
-
-
-def region_de(libelle):
-    """« Estrie (05) » devient ("05", "Estrie"). Retourne (None, None) si le format ne correspond pas."""
-    m = re.fullmatch(r"\s*(.+?)\s*\((\d{2})\)\s*", libelle or "")
-    return (m.group(2), m.group(1)) if m else (None, None)
-
-
-def code_mrc_de(libelle, prefixe="AR"):
-    """« MRC Bellechasse (190) » devient « AR190 ». Le fichier des MRC écrit ses codes ainsi.
-
-    Pour une communauté métropolitaine, « Communauté métropolitaine de
-    Montréal (663) » devient « CM663 » avec prefixe="CM".
-    """
-    m = re.search(r"\((\d{3})\)\s*$", libelle or "")
-    return prefixe + m.group(1) if m else None
 
 
 def decrire_export(nom_fichier):
@@ -352,26 +314,6 @@ def regrouper_fournisseurs(lus, connus, par_neq):
 # Écriture dans la base
 # ---------------------------------------------------------------------------
 
-def inserer(connexion, table, lignes, conflit="DO NOTHING", cle=None):
-    """Insère des lignes (des dictionnaires aux mêmes clés) dans une table.
-
-    conflit dit quoi faire si la ligne existe déjà : DO NOTHING (garder
-    l'ancienne) ou DO UPDATE (la remplacer, pour les données de référence).
-    """
-    if not lignes:
-        return
-    colonnes = list(lignes[0])
-    requete = (f"INSERT INTO {table} ({', '.join(colonnes)}) VALUES ({', '.join('%(' + c + ')s' for c in colonnes)}) "
-               f"ON CONFLICT")
-    if conflit == "DO UPDATE":
-        mises_a_jour = [c for c in colonnes if c not in cle]
-        requete += f" ({', '.join(cle)}) DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in mises_a_jour)
-    else:
-        requete += " DO NOTHING"
-    with connexion.cursor() as curseur:
-        curseur.executemany(requete, lignes)
-
-
 def noter_fichier_reference(connexion, chemin, description):
     """Garde la trace d'un fichier de référence : son empreinte, qui identifie la version chargée,
     et la date du fichier sur le disque.
@@ -379,10 +321,10 @@ def noter_fichier_reference(connexion, chemin, description):
     Cette date peut venir d'un téléchargement, d'une copie ou d'une extraction : elle ne prouve
     ni la publication, ni le téléchargement, ni la dernière modification du contenu.
     """
-    inserer(connexion, "territoire.fichier_reference", [{
-        "nom": chemin.name, "description": description,
-        "date_fichier": datetime.fromtimestamp(chemin.stat().st_mtime).date(),
-        "empreinte_sha256": empreinte(chemin)}], "DO UPDATE", ["nom"])
+    FichierReference.inserer(connexion, [FichierReference(
+        nom=chemin.name, description=description,
+        date_fichier=datetime.fromtimestamp(chemin.stat().st_mtime).date(),
+        empreinte_sha256=empreinte(chemin))])
 
 
 def charger_territoire(connexion):
@@ -407,13 +349,9 @@ def charger_territoire(connexion):
             if code in regions and regions[code] != nom:
                 raise ValueError(f"La région {code} porte deux noms : {regions[code]} et {nom}")
             regions[code] = nom
-    inserer(connexion, "territoire.region", [{"code": c, "nom": n} for c, n in sorted(regions.items())], "DO UPDATE", ["code"])
+    Region.inserer(connexion, [Region(code=c, nom=n) for c, n in sorted(regions.items())])
 
-    inserer(connexion, "territoire.mrc", [{
-        "code": m["mrccod"].strip(), "nom": m["mrcnom"].strip(), "designation": m["mrcdescdesi"].strip(),
-        "population": entier(m["mrcpopul"]), "superficie_km2": nombre(m["msupf"]),
-        "code_postal": texte(m["mrccodp"]), "region_code": region_de(m["mrcregion"])[0],
-    } for m in mrc], "DO UPDATE", ["code"])
+    Mrc.inserer(connexion, [Mrc.depuis_repertoire(m) for m in mrc])
 
     # Une municipalité regroupée laisse son code et son nom à celle qui l'a absorbée.
     # L'ancien code doit avoir quitté le répertoire, et la nouvelle municipalité y être.
@@ -431,16 +369,7 @@ def charger_territoire(connexion):
         codes.append(r["ancien_code"])
         noms.append(r["ancien_nom"])
 
-    inserer(connexion, "territoire.municipalite", [{
-        "code_geographique": m["mcode"].strip(), "nom": m["munnom"].strip(), "designation": m["mdes"].strip(),
-        "population": entier(m["mpopul"]), "superficie_km2": nombre(m["msuperf"]),
-        "superficie_terrestre_km2": nombre(m["msupft"]), "code_postal": texte(m["mcodpos"]),
-        "date_constitution": date.fromisoformat(m["mdatcons"]) if texte(m["mdatcons"]) else None,
-        "region_code": region_de(m["regadm"])[0], "mrc_code": code_mrc_de(m["mrc"]),
-        "communaute_code": code_mrc_de(m["mcm"], "CM"),
-        "anciens_codes": anciens.get(m["mcode"].strip(), ([], []))[0],
-        "anciens_noms": anciens.get(m["mcode"].strip(), ([], []))[1],
-    } for m in municipalites], "DO UPDATE", ["code_geographique"])
+    Municipalite.inserer(connexion, [Municipalite.depuis_repertoire(m, anciens) for m in municipalites])
 
     # Les trois fichiers de la Stratégie, réunis par code et par année. Le zéro
     # du début manque parfois : on complète chaque code à cinq chiffres.
@@ -462,7 +391,7 @@ def charger_territoire(connexion):
                 valeur = texte(ligne.get(source))
                 rangee[colonne] = (valeur if colonne == "classe_population"
                                    else entier(valeur) if colonne == "population_desservie" else nombre(valeur))
-    inserer(connexion, "territoire.indicateur_eau", list(eau.values()), "DO UPDATE", ["code_source", "annee"])
+    IndicateurEau.inserer(connexion, [IndicateurEau(**rangee) for rangee in eau.values()])
 
 
 def charger_organismes(connexion):
