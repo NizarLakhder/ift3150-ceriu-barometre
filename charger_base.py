@@ -43,6 +43,7 @@ from psycopg.types.json import Jsonb
 import analyser_seao
 import completer_contexte
 from barometre.configuration import ConfigurationInvalide
+from barometre.contexte.fichier import lire_contexte
 from barometre.regles import regles
 from utilitaires import clean_org_name, clean_text, date_from_release_id, valid_date, write_csv
 
@@ -469,8 +470,7 @@ def charger_organismes(connexion):
 
     Le fichier fait foi : il met à jour les organismes déjà en base. « À compléter » devient NULL.
     """
-    with completer_contexte.CONTEXTE_CSV.open(encoding="utf-8-sig", newline="") as fichier:
-        contexte = list(csv.DictReader(fichier))
+    _, contexte = lire_contexte(completer_contexte.CONTEXTE_CSV)
     municipalites = {c for (c,) in connexion.execute("SELECT code_geographique FROM territoire.municipalite")}
     mrc = {c for (c,) in connexion.execute("SELECT code FROM territoire.mrc")}
 

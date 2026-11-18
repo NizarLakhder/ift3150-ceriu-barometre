@@ -1,12 +1,18 @@
-"""Le fichier de contexte (contexte_municipalites.csv) vu par l'analyse : la vue à enrichir, le
-rattachement de la saisie aux organismes de l'export, et l'ajout des organismes nouveaux à la fin."""
+"""Le fichier de contexte (contexte_municipalites.csv), seul endroit où il est lu ou écrit.
+
+Pour l'analyse : la vue à enrichir, le rattachement de la saisie aux organismes de l'export, et
+l'ajout des organismes nouveaux à la fin. Pour completer_contexte.py : la lecture, la réécriture
+après sauvegarde, et la liste des cas à vérifier. Pour charger_base.py : la lecture.
+"""
 
 import csv
 import shutil
 from collections import defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 
 from barometre.chemins import DOSSIER_SORTIES
+from barometre.contexte.noms import normaliser_code_postal
 from utilitaires import clean_org_name, clean_text
 
 
@@ -16,6 +22,68 @@ CONTEXT_FIELDS = (
     "region_administrative", "mrc", "type_milieu",
     "particularites_infrastructures", "source_contexte", "notes",
 )
+
+# Les étiquettes d'une case sans valeur chiffrée.
+A_COMPLETER = "À compléter"      # la donnée peut exister, on ne l'a pas encore trouvée
+SANS_OBJET = "Sans objet"        # le champ ne s'applique pas, comme la MRC d'une MRC
+HORS_MRC = "Hors MRC"            # ce que dit le répertoire des villes qui ne font partie d'aucune MRC
+AUCUNE_DONNEE = "Aucune donnée"  # ce que publie la Stratégie pour une municipalité sans données sur l'eau
+
+
+@contextmanager
+def ouvrir_contexte(chemin):
+    """Ouvre un fichier de contexte en lecture et donne son csv.DictReader.
+
+    « utf-8-sig » retire le BOM; newline="" laisse au module csv les fins de ligne
+    et les sauts de ligne dans une cellule. Les contrôles restent à l'appelant.
+    """
+    with Path(chemin).open("r", encoding="utf-8-sig", newline="") as fichier:
+        yield csv.DictReader(fichier)
+
+
+def lire_contexte(chemin):
+    """Retourne (colonnes, lignes) du fichier de contexte, tels quels, sans contrôle."""
+    with ouvrir_contexte(chemin) as lecteur:
+        return lecteur.fieldnames, list(lecteur)
+
+
+def reecrire_contexte(chemin, colonnes, lignes, dossier_sauvegarde=DOSSIER_SORTIES):
+    """Réécrit tout le fichier de contexte, après l'avoir copié dans dossier_sauvegarde/<nom>.bak.
+
+    Mêmes colonnes dans le même ordre, UTF-8 avec BOM, fins de ligne CRLF : un fichier
+    déjà dans ce format, relu puis réécrit sans changement, reste identique octet pour octet.
+    """
+    chemin, dossier_sauvegarde = Path(chemin), Path(dossier_sauvegarde)
+    # Une seule sauvegarde, remplacée à chaque exécution.
+    dossier_sauvegarde.mkdir(exist_ok=True)
+    shutil.copy2(chemin, dossier_sauvegarde / (chemin.name + ".bak"))
+    with chemin.open("w", encoding="utf-8-sig", newline="") as fichier:
+        ecrivain = csv.DictWriter(fichier, fieldnames=colonnes)
+        ecrivain.writeheader()
+        ecrivain.writerows(lignes)
+
+
+def ecrire_cas_a_verifier(chemin, a_trancher, non_municipaux):
+    """Écrit la liste des cas non rattachés : a_traiter vaut « oui » pour a_trancher, « non » sinon."""
+    with open(chemin, "w", encoding="utf-8-sig", newline="") as fichier:
+        ecrivain = csv.writer(fichier)
+        # Les cas à trancher d'abord, puis ceux pour lesquels il n'y a rien à faire.
+        ecrivain.writerow(["organisme", "raison", "a_traiter"])
+        ecrivain.writerows(cas + ("oui",) for cas in sorted(a_trancher))
+        ecrivain.writerows(cas + ("non",) for cas in sorted(non_municipaux))
+
+
+def lire_codes_postaux_seao(dossier=DOSSIER_SORTIES):
+    """Retourne {identifiant d'acheteur : codes postaux du SEAO}, lus dans sorties/*/a_enrichir.csv."""
+    codes = {}
+    for chemin in sorted(Path(dossier).glob("*/a_enrichir.csv")):
+        with chemin.open(encoding="utf-8-sig", newline="") as fichier:
+            for ligne in csv.DictReader(fichier):
+                for identifiant in (ligne.get("buyer_ids") or "").split("|"):
+                    for code in (ligne.get("code_postal_seao") or "").split("|"):
+                        if identifiant.strip() and code.strip():
+                            codes.setdefault(identifiant.strip(), set()).add(normaliser_code_postal(code))
+    return codes
 
 
 def build_context_rows(summaries, rows):
@@ -145,8 +213,8 @@ def append_context_rows(source_path, rows, dossier_sauvegarde=DOSSIER_SORTIES):
         return 0
     source_path = Path(source_path)
     avant = source_path.read_bytes()
-    with source_path.open("r", encoding="utf-8-sig", newline="") as file:
-        fields = csv.DictReader(file).fieldnames
+    with ouvrir_contexte(source_path) as reader:
+        fields = reader.fieldnames
     Path(dossier_sauvegarde).mkdir(exist_ok=True)
     sauvegarde = Path(dossier_sauvegarde) / (source_path.name + ".avant_ajout")
     shutil.copy2(source_path, sauvegarde)
@@ -175,8 +243,7 @@ def load_context_source(source_path, generated_path, context_rows):
     comprises), sinon à partir de context_rows.
     """
     def read_rows(path):
-        with Path(path).open("r", encoding="utf-8-sig", newline="") as file:
-            reader = csv.DictReader(file)
+        with ouvrir_contexte(path) as reader:
             fields = reader.fieldnames or []
             if not {"organisme", "buyer_ids"}.issubset(fields):
                 raise ValueError(f"Colonnes organisme et buyer_ids requises dans {path}")

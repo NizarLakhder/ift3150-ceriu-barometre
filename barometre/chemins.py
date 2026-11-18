@@ -12,6 +12,8 @@ JSON_FILE = DOSSIER_SEAO / "hebdo_20260907_20260913.json"
 CONTEXT_SOURCE_CSV = Path("contexte_municipalites.csv")
 # Ancienne vue, lue une seule fois pour créer le fichier de contexte (voir load_context_source).
 ANCIENNE_VUE_CONTEXTE = DOSSIER_SORTIES / "municipalites_a_enrichir.csv"
+# Les cas que completer_contexte.py n'a pas pu rattacher au répertoire.
+A_VERIFIER_CSV = DOSSIER_SORTIES / "contexte_a_verifier.csv"
 
 
 def trouver_fichier_json(nom):
