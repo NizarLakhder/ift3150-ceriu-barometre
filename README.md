@@ -4,204 +4,65 @@ Projet IFT3150, Université de Montréal, automne 2026.
 Étudiant : Nizar Lakhder. Superviseur : Louis-Édouard Lafontant.
 Partenaire : CERIU, Pôle Données & Informations.
 
+Une municipalité mène plusieurs démarches pour gérer ses infrastructures. Une partie laisse des
+traces publiques, mais réparties entre plusieurs sources et présentées de façons différentes.
+
 Le projet mesure jusqu'où les données publiques permettent de suivre les démarches de gestion
 d'actifs des municipalités québécoises, en commençant par le plan de gestion des actifs en eau
-(PGA-Eau).
+(PGA-Eau). Il lit les exports du système électronique d'appel d'offres (SEAO), repère les appels
+d'offres et les contrats liés à la gestion des actifs en eau, range le tout dans une base PostgreSQL
+et prépare une carte de l'état de chaque municipalité.
 
-Site de suivi : <https://nizarlakhder.github.io/ift3150-ceriu-barometre/>
+## Ce que le projet dit, et ce qu'il ne dit pas
 
-## État au 3 novembre 2026
+- **« Aucune trace » ne veut pas dire « pas de plan ».** Cela veut dire qu'aucune démarche liée
+  à la gestion des actifs en eau n'a été repérée dans les exports chargés.
+- **Le SEAO permet de repérer des appels d'offres et des contrats liés aux démarches.** Il ne
+  permet pas, à lui seul, de savoir si le plan est terminé ou adopté. Un plan fait à l'interne et un
+  mandat sous le seuil de publication n'y apparaissent pas.
+- **Le repérage propose, une personne tranche.** Les règles lisent surtout les titres, et chaque
+  dossier repéré est classé à la main, avec sa source. Ce n'est pas un taux de détection.
+- **Une fiche n'est pas un contrat**, et aucun montant publié n'est une dépense payée.
 
-- **7 exports du SEAO lus en entier** : les mois de mai, août et septembre 2026, et quatre semaines
-  de septembre et d'octobre, soit 28 611 fiches municipales distinctes, rangées dans une base
-  PostgreSQL de 21 tables.
-- **33 dossiers liés à la gestion des actifs en eau**, tous classés à la main dans `demarches.csv` :
-  15 repérés par la règle PGA-Eau, et 18 par un repérage plus large (8 plans d'intervention des
-  réseaux d'eau, un plan de gestion de tous les actifs, 3 démarches voisines et 6 logiciels).
-- **L'état de chaque municipalité** : 10 ont un PGA-Eau repéré dans le SEAO, 16 une démarche liée,
-  et 1 255 aucune trace dans les exports chargés, ce qui ne veut pas dire qu'elles n'ont pas de plan.
-- **Le contexte municipal** : 934 des 1 042 organismes rencontrés sont rattachés au répertoire du
-  ministère, avec leur population. Les 108 autres ne sont pas des municipalités.
-- **77 tests automatisés.** Les mêmes fichiers donnent toujours les mêmes chiffres.
+Avec les sept exports de 2026 chargés le 18 novembre 2026, sur 1 281 municipalités : 10 ont un
+PGA-Eau repéré dans le SEAO, 11 une démarche liée, 5 un outil seulement, et 1 255 aucune trace.
 
-## Ce que les données montrent
+## Les sources de données
 
-**Le SEAO ne montre qu'une partie d'une démarche** : le mandat confié à une firme ou à un organisme
-externe. Une municipalité absente du SEAO peut faire son plan à l'interne, ou payer un mandat sous
-le seuil de publication. Et un contrat prouve qu'un mandat a été confié, pas qu'un plan existe.
+Les programmes ne téléchargent rien d'autre que les contours de la carte : les fichiers se déposent
+à la main.
 
-| Étape officielle du PGA-Eau | Ce que le SEAO montre | Ce qui manque |
-|---|---|---|
-| S'engager, avant le 31 décembre 2026 | rien | la résolution du conseil municipal |
-| Produire le plan | un avis, un contrat, un fournisseur, un montant, des dates | le plan lui-même et sa conformité |
-| Suivi annuel, à partir de 2028 | rien | les rapports transmis au ministère |
-
-- **Le mot « PGA-Eau » ne suffit pas.** Windsor écrit « PGA – Eau » avec un tiret long, et
-  Mont-Tremblant n'emploie pas l'acronyme. Le filtre large « lié à l'eau » les trouve, mais parmi
-  749 fiches pour le seul mois d'août. Et le repérage ne voit pas un mandat dont le titre et la
-  description n'emploient aucun de ces mots.
-- **Une fiche n'est pas un contrat.** Dans la semaine du 7 septembre 2026, seulement 403 des 1 561
-  fiches municipales portent sur un avis ouvert cette semaine-là; la plus ancienne remonte à 2013.
-  Un même dossier revient d'un export à l'autre : 476 paraissent à la fois dans cette semaine et
-  dans le mois d'août.
-- **Aucun montant n'est une dépense payée.** Le SEAO publie un montant attribué, un montant de
-  contrat et un `totalAmount` dont le sens reste à valider. Le montant estimé de l'appel d'offres
-  n'est jamais publié pour les acheteurs municipaux.
-- **Les petits mandats passent inaperçus.** Seulement 8,5 % des contrats d'achat chiffrés de la
-  semaine, et 7,9 % de ceux d'août, sont sous 25 000 \$. La semaine compte 18 contrats entre
-  20 000 et 25 000 \$, contre 58 entre 25 000 et 30 000 \$ : sans doute l'effet de l'obligation de
-  publication.
-- **Le SEAO écrit mal certains noms** : « St » pour Saint, un « de » oublié, « Rougement » pour
-  Rougemont. Le rattachement au répertoire les tolère, mais seulement si un indice publié le
-  confirme : code postal, désignation ou région. Sur 36 907 fautes introduites exprès dans les noms
-  officiels, 83 % sont retrouvées, et aucune ne mène à une mauvaise municipalité. Les 18 cas
-  qu'aucun indice ne tranchait ont été réglés à la main, chacun avec sa source publique.
-- **Les fichiers du ministère ont trois défauts, contournés.** Le répertoire abrège « Comm.
-  métropolitaine de Montréal », et la communauté recevait la population de la Ville : 1,9 million
-  d'habitants au lieu de 4,3. Les noms des organismes périmunicipaux sont coupés à 60 caractères
-  (132 organismes sur 338). Deux fichiers de la Stratégie perdent le zéro du début des codes :
-  « 3005 » pour Gaspé.
-- **Le SEAO republie parfois une fiche autrement** : 103 des 2 132 fiches communes à deux exports
-  changent d'étiquettes, ou du rôle d'une entreprise.
-- **Les plans de gestion des actifs des bâtiments sont visibles eux aussi**, à Dollard-des-Ormeaux,
-  Pointe-Claire ou Repentigny : la même méthode pourra servir pour eux.
-- **Un petit modèle de langage**, qwen2.5 à 3 milliards de paramètres, installé avec Ollama, remplit
-  correctement 14 champs précis d'une seule fiche. Mais invité à analyser cinq fiches à la fois, il
-  ne reconnaît aucun des trois dossiers PGA-Eau, et il coupe sans prévenir un message trop long
-  pour sa fenêtre de lecture.
-
-Le détail, semaine par semaine, est sur le site de suivi.
-
-## La base de données
-
-`charger_base.py` range les données dans PostgreSQL, en quatre groupes, chacun dans son schéma :
-21 tables et 5 vues.
-
-| Groupe | Ce qu'il contient |
-|---|---|
-| `territoire` | le répertoire du ministère : régions, MRC, municipalités avec leurs anciens codes, données sur l'eau |
-| `organismes` | qui achète : l'organisme réel et ses identifiants d'acheteur dans le SEAO |
-| `seao` | les exports chargés et les fiches, découpées en tables : dossier, fiche, attribution, contrat, fournisseur… |
-| `analyses` | le classement des fiches, les démarches classées à la main et les vues de consultation |
-
-- **Des numéros attribués par la base**, sauf pour les codes officiels : région, MRC, code
-  géographique, nomenclature du SEAO, UNSPSC. L'identifiant publié devient une colonne unique, car
-  une fiche ne s'identifie qu'avec deux numéros, et une entreprise a parfois plusieurs
-  identifiants `FO`.
-- **Une fiche, plusieurs exports** : une fiche n'est copiée qu'une fois, et `seao.fiche_fichier` la
-  relie à chaque export où elle figure, avec la version publiée si elle diffère.
-- **Des valeurs permises** : les statuts, les modes de sollicitation, les étiquettes, la devise et
-  nos catégories ont chacun leur type énuméré. Une valeur inconnue arrête le chargement.
-- **Un commentaire pour chaque colonne**, dans `schema.sql`.
-
-À chaque chargement, un export déjà chargé est reconnu par son empreinte, et la base doit redonner
-les chiffres d'`analyser_seao.py`, export par export : les mêmes fiches, la même somme des montants
-attribués, les mêmes dossiers repérés. La vue `analyses.contrat_courant` compte chaque contrat une
-seule fois, dans sa dernière version.
-
-## Contenu du dépôt
-
-| Emplacement | Contenu |
-|---|---|
-| `analyser_seao.py` | lit un export du SEAO et produit quatre tableaux |
-| `completer_contexte.py` | complète le contexte municipal avec les fichiers du ministère |
-| `charger_base.py` | range le tout dans PostgreSQL, puis vérifie le résultat |
-| `utilitaires.py` | les petites fonctions partagées : texte, dates, montants, CSV |
-| `schema.sql` | la structure de la base |
-| `contexte_municipalites.csv` | le contexte de chaque organisme : les programmes y ajoutent des lignes et remplissent les cases « À compléter », sans jamais écraser une valeur |
-| `regroupements.csv` | les municipalités regroupées depuis 2025, avec leurs sources officielles |
-| `demarches.csv` | les démarches de gestion des actifs en eau, une ligne par dossier, classées à la main avec leur source |
-| `test_*.py` | les 77 tests, sur de petits cas construits, sans les vrais exports ni la base |
-| `requirements.txt` | les bibliothèques à installer |
-| `docs/`, `zensical.toml`, `.github/workflows/docs.yml` | le site de suivi et sa publication |
-
-Les dossiers `donnees_seao/`, `donnees_reference/` et `sorties/` ne sont pas versionnés : les deux
-premiers contiennent des données publiques retéléchargeables, le troisième ce que les programmes
-régénèrent.
-
-## Lancer l'analyse
-
-Il faut Python 3.11 ou plus récent : les règles de repérage sont lues dans `config/regles_reperage.toml`
-avec `tomllib`, apparu avec Python 3.11.
-
-```powershell
-pip install -r requirements.txt
-
-python analyser_seao.py                                  # l'export de la semaine du 7 septembre 2026
-python analyser_seao.py mensuel_20260801_20260831.json   # un autre export de donnees_seao/
-python completer_contexte.py                             # après l'analyse : il y lit les codes postaux
-python charger_base.py                                   # voir « Préparer la base de données »
-python -B -m unittest -v                                 # les 77 tests
-```
-
-Après `completer_contexte.py`, relancez l'analyse pour que `sorties/` en tienne compte. Les tableaux
-sont écrits dans un dossier par export, comme `sorties/mensuel_20260801_20260831/`, et remplacés à
-chaque exécution. Les fichiers tenus à la main sont `contexte_municipalites.csv`,
-`regroupements.csv` et `demarches.csv`. Pour régler un cas de contexte, il suffit d'écrire le code
-géographique de l'organisme : le programme remplit le reste.
-
-## Préparer la base de données
-
-Il faut PostgreSQL 13 ou plus récent; le projet est testé avec la version 18. Une seule fois :
-
-1. Créer un compte et une base réservés au projet, en administrateur :
-
-   ```sql
-   CREATE ROLE barometre LOGIN PASSWORD 'un-mot-de-passe';
-   CREATE DATABASE barometre OWNER barometre;
-   ```
-
-2. Écrire ce mot de passe dans le fichier de mots de passe de PostgreSQL, hors du projet :
-   `%APPDATA%\postgresql\pgpass.conf` sous Windows, `~/.pgpass` ailleurs.
-
-   ```text
-   localhost:5433:barometre:barometre:un-mot-de-passe
-   ```
-
-3. Lancer `python charger_base.py`. Il crée les tables si elles n'existent pas, charge ce qui
-   manque, puis compare la base aux tableaux d'`analyser_seao.py`. Un export déjà chargé est laissé
-   de côté. Après une modification de `schema.sql`, `python charger_base.py --reinitialiser` efface
-   tout et recharge.
-
-La connexion par défaut est `localhost`, port 5433, compte et base `barometre`. Les variables
-`BAROMETRE_HOTE`, `BAROMETRE_PORT`, `BAROMETRE_BASE` et `BAROMETRE_COMPTE` permettent d'en changer.
-
-Deux exemples de requêtes :
-
-```sql
--- Les dossiers PGA-Eau, avec la population de leur municipalité.
-SELECT organisme, territoire, population, titre
-FROM analyses.fiche_municipale
-WHERE pga_eau
-ORDER BY population;
-
--- Les titres qui parlent d'un plan de gestion des actifs, avec ou sans accents.
-SELECT titre
-FROM seao.fiche
-WHERE titre_recherche @@ plainto_tsquery('analyses.fr_sans_accents', 'plan gestion actifs');
-```
-
-## Obtenir les données
-
-Les programmes ne téléchargent rien : les fichiers se déposent à la main.
-
-- **Les exports du SEAO**, dans `donnees_seao/` : le jeu « Système électronique d'appel d'offres
-  (SEAO) » sur Données Québec,
-  <https://www.donneesquebec.ca/recherche/dataset/systeme-electronique-dappel-doffres-seao>.
-- **Le contexte municipal**, dans `donnees_reference/` : deux jeux du ministère des Affaires
-  municipales et de l'Habitation sur Données Québec, le
+- **Les exports du SEAO**, dans `donnees_seao/`, pris dans le jeu « Système électronique d'appel
+  d'offres (SEAO) » de Données Québec :
+  <https://www.donneesquebec.ca/recherche/dataset/systeme-electronique-dappel-doffres-seao>. La
+  chaîne traite tous les exports présents. Le chargement lit la période dans le nom du fichier, qui
+  doit avoir la forme `hebdo_20260907_20260913.json` ou `mensuel_20260801_20260831.json`.
+- **Les fichiers du ministère des Affaires municipales et de l'Habitation**, dans
+  `donnees_reference/`, pris dans deux jeux de Données Québec : le
   [Répertoire des municipalités du Québec](https://www.donneesquebec.ca/recherche/dataset/repertoire-des-municipalites-du-quebec)
   et la
   [Stratégie québécoise d'économie d'eau potable 2019-2025](https://www.donneesquebec.ca/recherche/dataset/sqeep-2019-2025).
+  Le tableau ci-dessous dit lesquels prendre.
+- **Les contours des municipalités**, que `exporter_carte.py` télécharge une fois depuis le service
+  web des découpages administratifs du ministère des Ressources naturelles et des Forêts, et range
+  dans `donnees_reference/contours_municipalites.geojson`.
+- **Les fichiers tenus à la main**, versionnés : `contexte_municipalites.csv` (le contexte de chaque
+  organisme acheteur), `regroupements.csv` (les regroupements de municipalités, avec leur source
+  officielle), `demarches.csv` (les dossiers classés à la main) et `config/regles_reperage.toml`
+  (les mots et les motifs des règles de repérage). La section 3 du
+  [guide](notes/lancer_le_projet.md) dit comment les modifier.
 
-| Jeu de données | Ressource à prendre | Fichier |
-|---|---|---|
-| Répertoire des municipalités du Québec | Liste des municipalités (csv) | `MUN.csv`, obligatoire |
-| Répertoire des municipalités du Québec | Liste des MRC_CM_Arg (csv) | `MRC_CM_Arg.csv` |
-| Répertoire des municipalités du Québec | Liste des organismes périmunicipaux | `A01_CONVERT_XML_ORG_PER_MUN.xml` |
-| Stratégie québécoise d'économie d'eau potable 2019-2025 | validité des audits 2024, par classe de population | `validite_classe_2024.csv` |
-| Stratégie québécoise d'économie d'eau potable 2019-2025 | indice de fuites 2024, par classe de population | `fuites_classe_2024.csv` |
-| Stratégie québécoise d'économie d'eau potable 2019-2025 | consommation résidentielle 2024, par classe de population | `consommation_classe_2024.csv` |
+| Fichier | Ressource à prendre | Rôle | `completer_contexte.py` | `charger_base.py` |
+|---|---|---|---|---|
+| `MUN.csv` | Liste des municipalités (csv) | les municipalités : code géographique, nom, désignation, région, MRC, population | obligatoire | obligatoire |
+| `MRC_CM_Arg.csv` | Liste des MRC_CM_Arg (csv) | les MRC, les communautés métropolitaines et l'Administration régionale Kativik | facultatif | obligatoire |
+| `A01_CONVERT_XML_ORG_PER_MUN.xml` | Liste des organismes périmunicipaux | reconnaître les régies, offices et sociétés, qui ne sont pas des municipalités | facultatif | non lu |
+| `validite_classe_2024.csv` | validité des audits 2024, par classe de population | données sur l'eau | facultatif | obligatoire |
+| `fuites_classe_2024.csv` | indice de fuites 2024, par classe de population | données sur l'eau | facultatif | obligatoire |
+| `consommation_classe_2024.csv` | consommation résidentielle 2024, par classe de population | données sur l'eau | facultatif | obligatoire |
+
+Les trois fichiers sur l'eau remplissent la colonne `particularites_infrastructures` du contexte et
+la table `territoire.indicateur_eau`.
 
 Les cas réglés à la main s'appuient sur d'autres sources publiques : les pages d'avis du SEAO, les
 avis republiés sur le site fédéral AchatsCanada, qui donnent l'adresse de l'acheteur quand la fiche
@@ -209,43 +70,187 @@ ne la donne pas, les annonces de regroupement du gouvernement du Québec et un a
 la Justice. Chacune est citée dans la page [Références](docs/references.md) du site et dans la
 colonne `notes` du fichier de contexte.
 
-Ces données sont publiées sous licence Creative Commons avec attribution. Les échéances du PGA-Eau
-viennent de la page « Préparer un plan de gestion des actifs en eau », sur quebec.ca.
+Les trois jeux de Données Québec utilisés, celui du SEAO, le Répertoire des municipalités et la
+Stratégie d'économie d'eau potable, sont publiés sous la licence Attribution (CC-BY 4.0), indiquée
+sur la page de chaque jeu (vérifié le 18 novembre 2026) : <https://www.donneesquebec.ca/licence/#cc-by>.
 
-## Questions ouvertes
+## Le parcours des données
 
-1. **Qu'est-ce qui compte comme trace de démarche?** Un accompagnement à 4 892 \$, comme celui de
-   Matagami, vaut-il un mandat d'élaboration du plan?
-2. **Que faire des 108 organismes non municipaux?** Quand une régie mène un PGA-Eau, comme la Régie
-   d'aqueduc de Grand Pré, les municipalités qu'elle dessert restent « sans trace ». Faut-il les
-   rattacher au territoire desservi, ou montrer les régies à part?
-3. **Que faire des municipalités regroupées?** Un contrat signé par Saint-Bruno avant son
-   regroupement est rattaché à Hébertville, avec sa population actuelle : la convention reste à
-   valider.
-4. **Comment mesurer ce que la méthode rate?** Une liste de référence, même partielle, de
-   municipalités engagées dans une démarche permettrait de le mesurer plutôt que de l'estimer.
-
-## Prochaines étapes
-
-1. Mettre la base à l'essai sur Supabase, une base PostgreSQL hébergée.
-2. Regrouper les entreprises inscrites plusieurs fois : `sorties/fournisseurs_a_regrouper.csv` en
-   propose 91 groupes, à vérifier à la main.
-3. Essayer un autre petit modèle de langage avec Ollama, et le comparer à qwen2.5.
-4. Décider de la place des organismes non municipaux (question 2).
-5. Construire l'interface du baromètre à partir des vues de la base, avec des comparaisons ajustées
-   à la population.
-6. Ajouter le type de milieu, d'après la classification de Statistique Canada par zones d'influence
-   métropolitaine.
-7. Suivre une démarche de bout en bout pour une municipalité, avec la résolution du conseil et la
-   publication du plan, trouvées dans d'autres sources publiques.
-
-## Le site de suivi
-
-```powershell
-zensical serve --open     # ou : python -m zensical serve --open
+```text
+ donnees_seao/ : les exports du SEAO, déposés à la main
+        │
+        ▼
+ 1. analyser_seao.py ──────► 4 CSV par export, dans sorties/
+        │
+        ▼
+ 2. completer_contexte.py ─► contexte_municipalites.csv, complété avec les fichiers du ministère
+        │
+        ▼
+ 3. analyser_seao.py ──────► les mêmes CSV, avec le contexte complété
+        │
+        ▼
+ 4. charger_base.py ───────► base PostgreSQL, vérifiée contre les CSV
+        │
+        ▼
+ 5. exporter_carte.py ─────► carte/donnees.js, que carte/index.html affiche
 ```
 
-Le site s'ouvre à <http://localhost:8000>. Chaque push sur `main` le reconstruit et le publie sur
-GitHub Pages; le réglage à faire une seule fois dans GitHub est Settings, Pages, Build and
-deployment, Source « GitHub Actions ». Il est construit avec Zensical, à partir du modèle du cours
-IFT3150.
+**Pourquoi deux analyses.** La première ajoute les organismes nouveaux à la fin de
+`contexte_municipalites.csv`, et écrit dans `sorties/<export>/a_enrichir.csv` les codes postaux que
+lit `completer_contexte.py`. La deuxième réécrit les quatre CSV de chaque export avec le contexte
+complété.
+
+**Ce que vérifie le chargement.** `charger_base.py` relit les exports JSON, y ajoute les démarches
+classées à la main (`demarches.csv`), puis vérifie la base contre les CSV de l'analyse, export par
+export (décision 8 de [decisions.md](notes/decisions.md)). D'où l'ordre : un acheteur absent du
+fichier de contexte arrête le chargement, et un export sans son `details.csv` rend la vérification
+incomplète (code 2). Les CSV servent aussi à consulter les résultats et à relire les données.
+
+## Avant de lancer
+
+- **Python 3.11 ou plus récent** : les règles de repérage sont lues avec `tomllib`, apparu avec
+  Python 3.11. À la racine du projet : `pip install -r requirements.txt` (psycopg pour PostgreSQL,
+  rapidfuzz pour les noms proches, zensical pour le site seulement).
+- **PostgreSQL 13 ou plus récent** : c'est la version minimale, à cause des extensions qu'installe
+  `schema.sql` (décision 4 de [decisions.md](notes/decisions.md)). Versions essayées : 18, et
+  17 sur Supabase.
+- **Une base PostgreSQL déjà créée, et la connexion configurée** : le chargement y crée les schémas
+  et les tables. La section 1 du [guide](notes/lancer_le_projet.md) dit comment créer la base et
+  son compte, où écrire le mot de passe et comment choisir le port (5433 par défaut, alors qu'une
+  installation standard écoute sur 5432).
+- **Les fichiers de la section « Les sources de données »**, déposés dans `donnees_seao/` et
+  `donnees_reference/`.
+- **Internet**, pour la carte seulement : `exporter_carte.py` télécharge une fois les contours des
+  municipalités, et la page de la carte charge Leaflet et le fond OpenStreetMap.
+
+## Lancer la chaîne
+
+Dans PowerShell, depuis la racine du projet. Le bloc entre `& {` et `}` s'exécute d'un seul tenant :
+au premier échec, `throw` arrête tout et dit quelle étape a échoué.
+
+```powershell
+& {
+    # Les tests d'abord : ils n'ont besoin ni des exports ni de la base.
+    python -B -m unittest -v
+    if ($LASTEXITCODE -ne 0) { throw "Tests : échec." }
+
+    $exports = @(Get-ChildItem donnees_seao -Filter *.json -File -ErrorAction Stop)
+    if ($exports.Count -eq 0) { throw "Aucun export dans donnees_seao/ : rien à analyser." }
+
+    # 1. Première analyse de chaque export
+    foreach ($export in $exports) {
+        python analyser_seao.py $export.Name
+        if ($LASTEXITCODE -ne 0) { throw "Première analyse : échec sur $($export.Name)." }
+    }
+
+    # 2. Complément du contexte
+    python completer_contexte.py
+    if ($LASTEXITCODE -ne 0) { throw "Complément du contexte : échec." }
+
+    # 3. Deuxième analyse de chaque export
+    foreach ($export in $exports) {
+        python analyser_seao.py $export.Name
+        if ($LASTEXITCODE -ne 0) { throw "Deuxième analyse : échec sur $($export.Name)." }
+    }
+
+    # 4. Chargement dans PostgreSQL, puis vérification contre les CSV
+    python charger_base.py
+    if ($LASTEXITCODE -ne 0) { throw "Chargement : code $LASTEXITCODE (1 : échec ou écart ; 2 : vérification incomplète)." }
+
+    # 5. Données de la carte
+    python exporter_carte.py
+    if ($LASTEXITCODE -ne 0) { throw "Carte : échec." }
+}
+```
+
+**Si le bloc s'arrête**, son message nomme l'étape en échec, et ce que le programme a écrit juste
+au-dessus en donne la cause. Les étapes déjà terminées restent en place, et un code 1 ou 2 du
+chargement n'annule pas les données chargées. Corriger la cause, puis relancer le bloc : la
+section 5 du [guide](notes/lancer_le_projet.md) dit, pour chaque situation, ce qui est en place et
+que faire.
+
+**Limite connue**, à corriger dans un lot séparé : si on donne à `analyser_seao.py` le nom d'un
+export qui n'existe pas, il affiche « Erreur : fichier introuvable », mais rend le code 0. La boucle
+ci-dessus ne lui passe que des fichiers présents.
+
+**Après le lancement**, une personne tranche les cas que les programmes signalent : les organismes
+à rattacher (`sorties/contexte_a_verifier.csv`), les dossiers à classer dans `demarches.csv` (leurs
+numéros s'affichent à la fin du chargement) et les fournisseurs à regrouper
+(`sorties/fournisseurs_a_regrouper.csv`). Le guide dit quoi faire de chacun (section 3) et donne
+les nombres de notre jeu de vérification, pour comparer (section 2).
+
+## Ce que la chaîne produit
+
+Pour chaque export, `analyser_seao.py` écrit quatre CSV dans `sorties/<export>/`, par exemple
+`sorties/mensuel_20260801_20260831/` :
+
+| Fichier | Une ligne par | Ce qu'on y trouve |
+|---|---|---|
+| `details.csv` | fiche municipale | l'organisme, le dossier, le titre, les dates, les fournisseurs, le lien vers l'avis et le résultat des règles de repérage |
+| `comparaison.csv` | organisme | le nombre d'avis, de contrats et d'avis liés à l'eau ou au PGA-Eau, les montants, la part de gré à gré et les fournisseurs fréquents |
+| `a_enrichir.csv` | organisme | la localité et le code postal donnés par le SEAO, et le contexte : population, région, MRC, données sur l'eau |
+| `qualite.csv` | point à relire | ce qui mérite une relecture dans la source : un fournisseur sans identifiant, un montant différent du montant attribué, une date d'attribution absente… Un signalement n'est pas une erreur. |
+
+`completer_contexte.py` complète `contexte_municipalites.csv` (population, région, MRC, données sur
+l'eau) et liste dans `sorties/contexte_a_verifier.csv` les cas à trancher à la main.
+`charger_base.py` range les données dans la base, en quatre schémas (`territoire`, `organismes`,
+`seao` et `analyses`), affiche le bilan de sa vérification contre les CSV et écrit
+`sorties/fournisseurs_a_regrouper.csv`. La section 6 du guide décrit la base, avec des exemples de
+requêtes.
+
+**La carte.** `exporter_carte.py` lit la base, puis produit `carte/donnees.js`. Le navigateur lit
+ce fichier quand on ouvre `carte/index.html`, sans serveur. Chaque municipalité y prend la couleur
+de son état : PGA-Eau repéré, démarche liée, outil seulement ou aucune trace. Un champ de recherche
+retrouve une municipalité par son nom.
+
+## Le dépôt
+
+```text
+ift3150-ceriu-barometre/
+├── analyser_seao.py             les quatre programmes de la chaîne,
+├── completer_contexte.py        dans l'ordre où on les lance
+├── charger_base.py
+├── exporter_carte.py
+├── barometre/                   le code appelé par les programmes, rangé par sujet : analyse/,
+│                                contexte/, sources/, chargement/, modele/ (une classe par table),
+│                                les règles et la lecture de leur fichier
+├── utilitaires.py               les petites fonctions partagées : texte, dates, montants, CSV
+├── config/                      regles_reperage.toml, les règles de repérage, commentées
+├── schema.sql                   la structure de la base, avec un commentaire par colonne
+├── contexte_municipalites.csv   les fichiers tenus à la main
+├── regroupements.csv
+├── demarches.csv
+├── carte/                       la page de la carte, et donnees.js, produit par exporter_carte.py
+├── tests/                       les tests
+├── notes/                       le guide détaillé et les décisions
+├── docs/                        le site de suivi, construit avec zensical.toml et publié par
+│                                .github/workflows/docs.yml
+├── requirements.txt             les bibliothèques à installer
+├── donnees_seao/                les exports du SEAO
+├── donnees_reference/           les fichiers du ministère et les contours
+└── sorties/                     ce que les programmes écrivent
+```
+
+`donnees_seao/`, `donnees_reference/` et `sorties/` ne sont pas versionnés : les deux premiers
+contiennent des données publiques à retélécharger, le troisième ce que les programmes régénèrent,
+dont les sauvegardes du contexte.
+
+## Les tests
+
+```powershell
+python -B -m unittest -v
+```
+
+Les 184 tests portent sur de petits cas construits, sans les vrais exports ni la base. On peut les
+lancer seuls après un changement du code ou des règles de repérage ; le bloc de lancement commence
+aussi par eux.
+
+## Pour aller plus loin
+
+- **Le guide détaillé**, [notes/lancer_le_projet.md](notes/lancer_le_projet.md) : la configuration
+  de la connexion, la comparaison avec notre jeu de vérification, les cas à trancher à la main, les
+  changements de `schema.sql`, le dépannage, la base et le site.
+- **Les décisions**, [notes/decisions.md](notes/decisions.md) : les choix du projet, avec le besoin,
+  la justification et les limites de chacun.
+- **Le site de suivi**, pour l'historique du projet, semaine par semaine :
+  <https://nizarlakhder.github.io/ift3150-ceriu-barometre/>.
