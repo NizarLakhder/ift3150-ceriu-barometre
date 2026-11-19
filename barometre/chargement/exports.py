@@ -12,7 +12,7 @@ from barometre.modele.organismes import Acheteur
 from barometre.modele.seao import (Attribution, Classification, Contrat, Dossier, Fiche, FicheClassification, FicheFichier,
                                    FichierSource, Nomenclature, Soumissionnaire)
 from barometre.sources.seao import decrire_export, get_municipal_buyer_party, validate_identifiers
-from utilitaires import clean_org_name, clean_text, date_from_release_id, empreinte
+from barometre.utilitaires import clean_org_name, clean_text, date_from_release_id, empreinte
 
 
 def lignes_de_la_fiche(release):

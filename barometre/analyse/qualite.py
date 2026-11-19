@@ -1,6 +1,6 @@
 """Les points à relire dans la source (qualite.csv). Un signalement n'est pas une erreur."""
 
-from utilitaires import format_money
+from barometre.utilitaires import format_money
 
 
 def build_quality_rows(rows, supplier_names_by_id):

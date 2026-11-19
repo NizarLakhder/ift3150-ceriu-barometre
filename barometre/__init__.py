@@ -1,1 +1,1 @@
-"""Code du baromètre. Vide pour l'instant : le code métier y sera déplacé, étape par étape."""
+"""Le code du baromètre, rangé par sujet. Les quatre programmes de la racine l'appellent, jamais l'inverse."""

@@ -10,7 +10,7 @@ from barometre.chemins import REGROUPEMENTS_CSV
 from barometre.modele.conversions import entier, nombre, region_de, texte
 from barometre.modele.territoire import FichierReference, IndicateurEau, Mrc, Municipalite, Region
 from barometre.sources.mamh import DOSSIER_SOURCES, FICHIERS, lire_csv
-from utilitaires import empreinte
+from barometre.utilitaires import empreinte
 
 
 def noter_fichier_reference(connexion, chemin, description):

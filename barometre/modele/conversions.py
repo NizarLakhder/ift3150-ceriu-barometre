@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from barometre.contexte.fichier import A_COMPLETER
-from utilitaires import valid_date
+from barometre.utilitaires import valid_date
 
 
 def texte(valeur):

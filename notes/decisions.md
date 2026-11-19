@@ -163,8 +163,7 @@ justification dit si elle a été notée à l'époque, et où, ou si elle est do
 - **Choix :** les mots et les motifs dans `config/regles_reperage.toml`, depuis le 17 novembre 2026.
   Le fichier est validé à son premier usage : s'il est invalide, l'analyse ne lit ni n'écrit rien,
   et le chargement n'ouvre aucune connexion. La version des règles, une empreinte de ce fichier,
-  d'`analyser_seao.py`, d'`utilitaires.py` et de tout `barometre/`, est notée avec le classement de
-  chaque fiche.
+  d'`analyser_seao.py` et de tout `barometre/`, est notée avec le classement de chaque fiche.
 - **Alternatives envisagées :** YAML et CSV, pesés dans le plan de restructuration du 12 novembre
   2026.
 - **Justification, notée à l'époque** (même plan) : un TOML se lit facilement, accepte des

@@ -3,7 +3,7 @@
 import statistics
 from collections import Counter, defaultdict
 
-from utilitaires import top
+from barometre.utilitaires import top
 
 
 def count_suppliers(rows):

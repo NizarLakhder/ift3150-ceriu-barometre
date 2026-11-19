@@ -1,6 +1,6 @@
 """Tests d'utilitaires.py : les petites fonctions partagées par les programmes.
 
-Commande : python -B -m unittest -v test_utilitaires
+Commande : python -B -m unittest -v tests.test_utilitaires
 """
 
 import csv
@@ -9,7 +9,7 @@ import unittest
 from collections import Counter
 from pathlib import Path
 
-import utilitaires as u
+from barometre import utilitaires as u
 
 
 class UtilitairesTests(unittest.TestCase):

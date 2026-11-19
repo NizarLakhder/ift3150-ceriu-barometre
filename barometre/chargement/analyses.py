@@ -15,14 +15,14 @@ from barometre.modele.conversions import code_de, nombre, texte
 def version_des_regles():
     """L'empreinte du code et du fichier qui classent les fiches.
 
-    Elle couvre trois fichiers nommés explicitement, analyser_seao.py, utilitaires.py et
-    config/regles_reperage.toml, et tous les modules de barometre/. S'il manque l'un des trois, elle
-    échoue plutôt que de calculer une empreinte sans lui. Elle change dès qu'une règle change. Les
+    Elle couvre deux fichiers nommés explicitement, analyser_seao.py et config/regles_reperage.toml,
+    et tous les modules de barometre/, dont utilitaires.py. S'il manque l'un des deux, elle échoue
+    plutôt que de calculer une empreinte sans lui. Elle change dès qu'une règle change. Les
     fichiers sont pris dans l'ordre de leur chemin, chacun précédé de ce chemin, et leurs fins de ligne
     sont ramenées à LF : la même version donne la même empreinte sous Windows comme ailleurs.
     """
     racine = Path(__file__).resolve().parents[2]  # la racine du projet, au-dessus de barometre/chargement/
-    explicites = [racine / "analyser_seao.py", racine / "utilitaires.py", racine / "config" / "regles_reperage.toml"]
+    explicites = [racine / "analyser_seao.py", racine / "config" / "regles_reperage.toml"]
     manquants = [f.relative_to(racine).as_posix() for f in explicites if not f.is_file()]
     if manquants:
         raise FileNotFoundError(f"Version des règles impossible à calculer : {', '.join(manquants)} introuvable.")

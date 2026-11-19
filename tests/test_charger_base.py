@@ -2,7 +2,7 @@
 
 La base elle-même est vérifiée à chaque chargement, par la fonction verifier.
 
-Commande : python -B -m unittest -v test_charger_base
+Commande : python -B -m unittest -v tests.test_charger_base
 """
 
 import copy

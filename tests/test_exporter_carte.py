@@ -1,6 +1,6 @@
 """Tests d'exporter_carte.py : la construction des données de la carte, sans PostgreSQL ni réseau.
 
-Commande : python -B -m unittest -v test_exporter_carte
+Commande : python -B -m unittest -v tests.test_exporter_carte
 """
 
 import json

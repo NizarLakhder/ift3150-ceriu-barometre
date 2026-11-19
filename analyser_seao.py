@@ -45,8 +45,8 @@ from barometre.regles import (UNSPSC_SUBVENTION, gestion_actifs_eau, get_nature,
                               is_water_related, org_type, regles, texte_de_recherche)
 from barometre.sources.seao import (get_amounts, get_categories, get_municipal_buyer_party,  # noqa: F401
                                     get_suppliers, validate_identifiers)
-from utilitaires import (clean_org_name, clean_text, date_from_release_id, format_money,  # noqa: F401
-                         safe_float, top, valid_date, write_csv)
+from barometre.utilitaires import (clean_org_name, clean_text, date_from_release_id, format_money,  # noqa: F401
+                                   safe_float, top, valid_date, write_csv)
 
 
 # ---------------------------------------------------------------------------

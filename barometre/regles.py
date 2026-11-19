@@ -10,7 +10,7 @@ import unicodedata
 from functools import cache
 
 from barometre import configuration
-from utilitaires import clean_org_name
+from barometre.utilitaires import clean_org_name
 
 
 # Codes UNSPSC des subventions. Trop large : 9315 attrape aussi le mandat

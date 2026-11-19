@@ -2,7 +2,7 @@
 
 Ils ne lisent pas les fichiers du ministère; les fichiers écrits vont dans des dossiers temporaires.
 
-Commande : python -B -m unittest -v test_completer_contexte
+Commande : python -B -m unittest -v tests.test_completer_contexte
 """
 
 import csv

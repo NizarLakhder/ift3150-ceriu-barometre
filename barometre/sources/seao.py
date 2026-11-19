@@ -5,7 +5,7 @@ lisent sans rien décider."""
 import re
 from datetime import datetime
 
-from utilitaires import clean_text, safe_float
+from barometre.utilitaires import clean_text, safe_float
 
 
 # ---------------------------------------------------------------------------

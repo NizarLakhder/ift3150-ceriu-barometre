@@ -2,7 +2,7 @@
 
 from barometre.regles import gestion_actifs_eau, get_nature, is_pga_eau, is_water_related, org_type
 from barometre.sources.seao import get_amounts, get_categories, get_municipal_buyer_party, get_suppliers
-from utilitaires import clean_org_name, clean_text, date_from_release_id, safe_float, valid_date
+from barometre.utilitaires import clean_org_name, clean_text, date_from_release_id, safe_float, valid_date
 
 
 # Un montant sous 1 000 $ est parfois un prix unitaire : il est signalé, jamais

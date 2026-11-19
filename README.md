@@ -213,8 +213,8 @@ ift3150-ceriu-barometre/
 ├── exporter_carte.py
 ├── barometre/                   le code appelé par les programmes, rangé par sujet : analyse/,
 │                                contexte/, sources/, chargement/, modele/ (une classe par table),
-│                                les règles et la lecture de leur fichier
-├── utilitaires.py               les petites fonctions partagées : texte, dates, montants, CSV
+│                                les règles et la lecture de leur fichier, et utilitaires.py, les
+│                                petites fonctions partagées : texte, dates, montants, CSV
 ├── config/                      regles_reperage.toml, les règles de repérage, commentées
 ├── schema.sql                   la structure de la base, avec un commentaire par colonne
 ├── contexte_municipalites.csv   les fichiers tenus à la main

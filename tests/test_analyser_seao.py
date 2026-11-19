@@ -2,7 +2,7 @@
 
 Ils ne lisent pas les vrais exports; les fichiers écrits vont dans des dossiers temporaires.
 
-Commande : python -B -m unittest -v test_analyser_seao
+Commande : python -B -m unittest -v tests.test_analyser_seao
 """
 
 import tempfile

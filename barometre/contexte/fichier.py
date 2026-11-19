@@ -20,7 +20,7 @@ from pathlib import Path
 
 from barometre.chemins import DOSSIER_SORTIES
 from barometre.contexte.noms import normaliser_code_postal
-from utilitaires import clean_org_name, clean_text
+from barometre.utilitaires import clean_org_name, clean_text
 
 
 # Les colonnes que le SEAO ne donne pas : completer_contexte.py ou une saisie à la main les remplit.

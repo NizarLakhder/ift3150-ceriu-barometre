@@ -340,7 +340,7 @@ CREATE TABLE analyses.fiche_classee (
     lie_eau             boolean NOT NULL,                      -- la fiche parle d'eau : un filet large
     pga_eau             boolean NOT NULL,                      -- le titre annonce un PGA-Eau
     gestion_actifs_eau  analyses.famille_actifs_eau,           -- la famille du repérage large, ou vide
-    version_regles      text NOT NULL,                         -- empreinte d'analyser_seao.py et d'utilitaires.py
+    version_regles      text NOT NULL,                         -- empreinte des règles : analyser_seao.py, le TOML et barometre/
     calcule_le          timestamptz NOT NULL DEFAULT now()     -- moment du calcul
 );
 

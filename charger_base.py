@@ -49,7 +49,7 @@ from barometre.modele.conversions import (CODES, code_de, code_mrc_de, entier, i
 from barometre.modele.organismes import type_organisme  # noqa: F401
 from barometre.regles import regles
 from barometre.sources.seao import decrire_export, ordre_de_chargement  # noqa: F401
-from utilitaires import empreinte, write_csv  # noqa: F401
+from barometre.utilitaires import empreinte, write_csv  # noqa: F401
 
 
 def main():
