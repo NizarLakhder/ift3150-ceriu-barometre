@@ -241,7 +241,7 @@ dont les sauvegardes du contexte.
 python -B -m unittest -v
 ```
 
-Les 184 tests portent sur de petits cas construits, sans les vrais exports ni la base. On peut les
+Les 185 tests portent sur de petits cas construits, sans les vrais exports ni la base. On peut les
 lancer seuls après un changement du code ou des règles de repérage ; le bloc de lancement commence
 aussi par eux.
 

@@ -53,7 +53,7 @@ programmes ont affiché :
 | Complément du contexte | 1 042 organismes ; 2 cas à trancher à la main (deux régies au nom mal écrit) ; 106 organismes non municipaux |
 | Chargement | 28 611 fiches ; 33 démarches ; « Exports comparés : 7/7 » et « Validation complète : aucun écart avec les CSV » ; 0 dossier à classer ; 91 groupes de fournisseurs à vérifier ; code 0 |
 | Carte | 1 281 municipalités : 10 « PGA-Eau repéré », 11 « démarche liée », 5 « outil seulement » et 1 255 « aucune trace » ; 2 démarches hors carte |
-| Tests | 184 tests réussis |
+| Tests | 185 tests réussis |
 
 Avec les mêmes fichiers, ces nombres servent de point de comparaison. Chaque programme les affiche
 à la fin ; les états se retrouvent aussi dans la base :

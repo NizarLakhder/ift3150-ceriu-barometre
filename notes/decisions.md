@@ -266,7 +266,7 @@ justification dit si elle a été notée à l'époque, et où, ou si elle est do
 ### 17. Des tests, et une restructuration vérifiée contre une référence
 
 - **Besoin :** changer l'organisation du code sans changer les résultats.
-- **Choix :** 184 tests sur de petits cas construits, sans les vrais exports ni la base ; une valeur
+- **Choix :** 185 tests sur de petits cas construits, sans les vrais exports ni la base ; une valeur
   attendue n'est jamais modifiée pour faire passer un test. La restructuration des 17 et 18 novembre
   2026 a été vérifiée lot par lot contre une exécution de référence, faite le 17 novembre sur le
   commit `763ab78` puis figée : mêmes CSV, même base et même carte.
