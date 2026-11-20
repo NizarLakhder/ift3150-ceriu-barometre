@@ -193,3 +193,6 @@ Thumbs.db
 
 # contexte_municipalites.csv, à la racine, n'est visé par aucune règle ci-dessus :
 # il contient la saisie manuelle du contexte et doit rester versionné.
+
+# Documents de travail personnels : jamais dans Git, ni sur le site.
+documents/
